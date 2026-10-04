@@ -104,7 +104,7 @@ jobs:
       # ─────────────────────────────────────────
       # FASE 2: APPLY PATCHES (BARU - monitor mode fix)
       # ─────────────────────────────────────────
-      - name: Apply NetHunter patches
+          - name: Apply NetHunter patches
         shell: bash
         run: |
           set -euo pipefail
@@ -114,33 +114,41 @@ jobs:
           HDD="$QCACLD/core/hdd/src"
 
           echo "=== Checking qcacld source ==="
-          ls "$QCACLD" 2>/dev/null && echo "qcacld found" || echo "qcacld not found - skip patch"
+          ls "$QCACLD" 2>/dev/null && echo "qcacld found" || echo "qcacld not found"
 
-          # ── Patch 1: QDF_BUG → return error (mencegah kernel panic) ──
+          # ── Patch 1: QDF_BUG → return error ──
           if [ -f "$QDF/qdf_event.c" ]; then
             echo "Applying: qdf_event panic fix"
-            # Ganti QDF_BUG di jalur event reset menjadi return error bersih
             sed -i 's/QDF_BUG(qdf_event->cookie == COOKIE_READY_TO_WAIT);/if (qdf_event->cookie != COOKIE_READY_TO_WAIT) { QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR, "%s: event not ready", __func__); return QDF_STATUS_E_FAILURE; }/g' \
               "$QDF/qdf_event.c"
             echo "✅ qdf_event.c patched"
+          else
+            echo "⚠️  qdf_event.c not found, skip"
           fi
 
-          # ── Patch 2: NULL pointer fix di hdd_disable_monitor_mode ──
+          # ── Patch 2: NULL pointer fix ──
           if [ -f "$HDD/wlan_hdd_main.c" ]; then
             echo "Applying: NULL pointer fix"
-            # Tambah guard sebelum akses mon vdev
-            python3 - << 'PYEOF'
-          import re
+            sed -i \
+              's/vdev = ol_txrx_get_mon_vdev_from_pdev(pdev);\n\thdd_mon_stop(vdev);/vdev = ol_txrx_get_mon_vdev_from_pdev(pdev);\n\tif (!vdev) { hdd_err("mon vdev NULL"); return -EINVAL; }\n\thdd_mon_stop(vdev);/g' \
+              "$HDD/wlan_hdd_main.c" || true
+
+            # Cara alternatif pakai Python dengan path yang sudah di-expand
+            python3 << PYEOF
+          import re, sys
 
           path = "$HDD/wlan_hdd_main.c"
-          with open(path, 'r') as f:
-              content = f.read()
+          try:
+              with open(path, 'r') as f:
+                  content = f.read()
+          except FileNotFoundError:
+              print(f"File not found: {path}")
+              sys.exit(0)
 
-          # Cari pola hdd_disable_monitor_mode dan tambah NULL check
           old = 'vdev = ol_txrx_get_mon_vdev_from_pdev(pdev);\n\thdd_mon_stop(vdev);'
           new = ('vdev = ol_txrx_get_mon_vdev_from_pdev(pdev);\n'
                  '\tif (!vdev) {\n'
-                 '\t\thdd_err("mon vdev NULL, safely skipping disable");\n'
+                 '\t\thdd_err("mon vdev NULL, safely skipping");\n'
                  '\t\treturn -EINVAL;\n'
                  '\t}\n'
                  '\thdd_mon_stop(vdev);')
@@ -151,21 +159,24 @@ jobs:
                   f.write(content)
               print("✅ NULL pointer patch applied")
           else:
-              print("⚠️  Pattern not found, may already be patched or different version")
+              print("⚠️  Pattern not found, may differ or already patched")
           PYEOF
+          else
+            echo "⚠️  wlan_hdd_main.c not found at $HDD"
+            echo "Searching alternative path..."
+            find "$QCACLD" -name "wlan_hdd_main.c" 2>/dev/null | head -5
           fi
 
-          # ── Apply patch files dari patches/common/ jika ada ──
+          # ── Apply patch files dari patches/common/ ──
           PATCHDIR="${GITHUB_WORKSPACE}/patches/common"
           if [ -d "$PATCHDIR" ]; then
-            echo "Applying patches from $PATCHDIR"
             for patch in "$PATCHDIR"/*.patch; do
               [ -f "$patch" ] || continue
-              echo "  Applying: $(basename $patch)"
+              echo "Applying: $(basename $patch)"
               cd "$KP"
               git apply --ignore-whitespace "$patch" 2>/dev/null \
-                && echo "  ✅ $(basename $patch)" \
-                || echo "  ⚠️  $(basename $patch) failed or already applied"
+                && echo "✅ $(basename $patch)" \
+                || echo "⚠️  $(basename $patch) skip"
             done
           fi
 
