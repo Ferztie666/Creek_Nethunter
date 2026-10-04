@@ -1,0 +1,419 @@
+name: Build Creek-Nethunter v2 Unified
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Parallel jobs: auto uses nproc --all"
+        required: true
+        default: "auto"
+        type: string
+      clean:
+        description: "Clean output before build"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    env:
+      WORK: ${{ github.workspace }}/work
+      KP: ${{ github.workspace }}/work/kernel_platform
+      OUT_DIR: ${{ github.workspace }}/out
+      DIST_DIR: ${{ github.workspace }}/out/dist
+      BUILD_CONFIG: msm-kernel/build.config.msm.creek
+      VARIANT: gki
+      LTO: thin
+      SKIP_MRPROPER: ${{ inputs.clean == false && '1' || '0' }}
+      KERNEL_CMDLINE_CONSOLE_AUTO: "0"
+      EXT_MODULES_MAKEFILE: ${{ github.workspace }}/scripts/creek-external-modules.mk
+      CREEK_DIST_DIR: ${{ github.workspace }}/out/dist
+      CREEK_INJECTION_DEBUG: "1"
+      MODULES_LIST: ${{ github.workspace }}/stock-modules/vendor_boot.modules.load
+      MODULES_RECOVERY_LIST: ${{ github.workspace }}/stock-modules/vendor_boot.modules.load.recovery
+      BUILD_VENDOR_BOOT_IMG: "1"
+      VENDOR_RAMDISK_BINARY: ${{ github.workspace }}/stock-modules/vendor_boot.ramdisk.lz4
+
+    steps:
+      - name: Checkout builder repo
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache || true
+          df -h
+
+      - name: Install packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev \
+            libncurses-dev libssl-dev libelf-dev python3 python-is-python3 bc rsync \
+            unzip cpio lz4 xz-utils file dwarves pahole jq ca-certificates \
+            binutils lld clang
+          sudo ln -sf "$(command -v ld.lld || command -v ld.bfd)" /usr/local/bin/ld
+
+      - name: Setup SWAP
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 16
+
+      - name: Install repo tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Repo sync Creek sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK"
+          cd "$WORK"
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git config --global color.ui false
+          repo init \
+            -u "https://github.com/${GITHUB_REPOSITORY}.git" \
+            -b "${GITHUB_REF_NAME}" \
+            -m kernel_manifest/creek.xml \
+            --repo-rev=stable \
+            --depth=1 \
+            --no-clone-bundle \
+            --no-tags
+          repo sync -c --no-clone-bundle --no-tags --optimized-fetch --fail-fast -j2
+          echo "Synced projects:"
+          repo list | sort
+
+      - name: Apply NetHunter patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          QCACLD="$KP/vendor/qcom/opensource/wlan/qcacld-3.0"
+          QDF_FILE="$QCACLD/qdf/src/qdf_event.c"
+          HDD_FILE="$QCACLD/core/hdd/src/wlan_hdd_main.c"
+
+          echo "=== qcacld path: $QCACLD ==="
+          ls "$QCACLD" 2>/dev/null || echo "qcacld not found yet"
+
+          if [ -f "$QDF_FILE" ]; then
+            echo "Patch 1: qdf_event panic fix"
+            sed -i 's/QDF_BUG(qdf_event->cookie == COOKIE_READY_TO_WAIT);/if (qdf_event->cookie != COOKIE_READY_TO_WAIT) { QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR, "%s: event not ready", __func__); return QDF_STATUS_E_FAILURE; }/g' "$QDF_FILE"
+            echo "qdf_event.c patched"
+          else
+            echo "qdf_event.c not found, skip"
+          fi
+
+          if [ -f "$HDD_FILE" ]; then
+            echo "Patch 2: NULL pointer fix"
+            grep -n "ol_txrx_get_mon_vdev_from_pdev" "$HDD_FILE" | head -5 || true
+            python3 /tmp/patch_hdd.py "$HDD_FILE"
+          else
+            echo "wlan_hdd_main.c not found at $HDD_FILE"
+            find "$QCACLD" -name "wlan_hdd_main.c" 2>/dev/null | head -3 || true
+          fi
+
+          PATCHDIR="${GITHUB_WORKSPACE}/patches/common"
+          if [ -d "$PATCHDIR" ]; then
+            for patch in "$PATCHDIR"/*.patch; do
+              [ -f "$patch" ] || continue
+              echo "Applying: $(basename $patch)"
+              cd "$KP"
+              git apply --ignore-whitespace "$patch" 2>/dev/null \
+                && echo "OK: $(basename $patch)" \
+                || echo "SKIP: $(basename $patch)"
+            done
+          fi
+          echo "=== Patches done ==="
+
+      - name: Write patch helper scripts
+        shell: bash
+        run: |
+          cat > /tmp/patch_hdd.py << 'PYEOF'
+          import sys
+          path = sys.argv[1]
+          with open(path, 'r') as f:
+              content = f.read()
+          old = 'vdev = ol_txrx_get_mon_vdev_from_pdev(pdev);\n\thdd_mon_stop(vdev);'
+          new = ('vdev = ol_txrx_get_mon_vdev_from_pdev(pdev);\n'
+                 '\tif (!vdev) {\n'
+                 '\t\thdd_err("mon vdev NULL, safely skipping");\n'
+                 '\t\treturn -EINVAL;\n'
+                 '\t}\n'
+                 '\thdd_mon_stop(vdev);')
+          if old in content:
+              with open(path, 'w') as f:
+                  f.write(content.replace(old, new))
+              print("NULL pointer patch applied OK")
+          else:
+              print("Pattern not found, may already be patched")
+          PYEOF
+
+      - name: Prepare Creek stock layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${GITHUB_WORKSPACE}/scripts/prepare-creek-stock.sh" "$KP"
+          "${GITHUB_WORKSPACE}/scripts/enable-creek-nethunter.sh" "$KP"
+          "${GITHUB_WORKSPACE}/scripts/enable-creek-external-build.sh" "$KP"
+          printf 'KERNEL_VENDOR_CMDLINE=%s\n' "$(cat "$GITHUB_WORKSPACE/stock-modules/vendor_boot.cmdline")" >> "$GITHUB_ENV"
+          echo "Expected clang:"
+          "$KP/prebuilts/clang/host/linux-x86/clang-r450784e/bin/clang" --version | head -n1
+
+      - name: Build Creek-Nethunter v2 kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
+          cd "$KP"
+          if [ "${{ inputs.jobs }}" = "auto" ]; then
+            JOBS="$(nproc --all)"
+          else
+            JOBS="${{ inputs.jobs }}"
+          fi
+          export KERNEL_BUILD_JOBS="$JOBS"
+          {
+            echo "BUILD_CONFIG=$BUILD_CONFIG"
+            echo "VARIANT=$VARIANT"
+            echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            build/build.sh -j"$JOBS"
+            echo "Finished at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          } 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build-creek-nethunter-v2.log"
+
+      - name: Verify module placement
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/logs"
+          "$GITHUB_WORKSPACE/scripts/verify-creek-module-placement.sh" \
+            "$KP" "$OUT_DIR" "$DIST_DIR" \
+            "$GITHUB_WORKSPACE/stock-modules" \
+            "$GITHUB_WORKSPACE/artifacts/logs/module-placement.txt"
+
+      - name: Clone AnyKernel3
+        if: success()
+        shell: bash
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 "$GITHUB_WORKSPACE/ak3"
+
+      - name: Pack unified AK3 zip
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          AK3="${GITHUB_WORKSPACE}/ak3"
+
+          if [ -f "$DIST_DIR/Image.gz" ]; then
+            cp -f "$DIST_DIR/Image.gz" "$AK3/Image.gz"
+            echo "Image.gz copied"
+          elif [ -f "$DIST_DIR/Image" ]; then
+            gzip -c "$DIST_DIR/Image" > "$AK3/Image.gz"
+            echo "Image.gz made from Image"
+          else
+            echo "ERROR: No kernel image found"
+            ls "$DIST_DIR" || true
+            exit 1
+          fi
+
+          mkdir -p "$AK3/modules/system/lib/modules"
+          mkdir -p "$AK3/modules/vendor/lib/modules"
+
+          STOCK_MODS="bootinfo.ko mi_memory.ko mi_thermal_interface.ko qrng_dlkm.ko qseecom_dlkm.ko swinfo.ko ipam.ko ipanetm.ko ipa_clientsm.ko rndisipam.ko rmnet_core.ko rmnet_ctl.ko rmnet_wlan.ko hdcp_qseecom_dlkm.ko lct_tp.ko msm-mmrm.ko msm_drm.ko smcinvoke_dlkm.ko"
+
+          for root in "$OUT_DIR/staging" "$OUT_DIR/gki_kernel/common" "$OUT_DIR/msm-kernel" "$DIST_DIR"; do
+            [ -d "$root" ] || continue
+            find "$root" -type f -name "*.ko" | while read ko; do
+              name=$(basename "$ko")
+              is_stock=0
+              for smod in $STOCK_MODS; do
+                [ "$name" = "$smod" ] && is_stock=1 && break
+              done
+              if [ "$is_stock" = "1" ]; then
+                cp -f "$ko" "$AK3/modules/vendor/lib/modules/" 2>/dev/null || true
+              else
+                cp -f "$ko" "$AK3/modules/system/lib/modules/" 2>/dev/null || true
+              fi
+            done
+          done
+
+          echo "System modules: $(ls $AK3/modules/system/lib/modules/ | wc -l)"
+          echo "Vendor modules: $(ls $AK3/modules/vendor/lib/modules/ 2>/dev/null | wc -l)"
+
+          cat > "$AK3/anykernel.sh" << 'AKEOF'
+          properties() { '
+          kernel.string=Creek-Nethunter v2 Unified
+          do.devicecheck=1
+          do.modules=1
+          do.systemmodules=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=creek
+          supported.versions=13-15
+          '; }
+          block=/dev/block/bootdevice/by-name/boot;
+          is_slot_device=1;
+          ramdisk_compression=auto;
+          . tools/ak3-core.sh;
+          dump_boot;
+          write_boot;
+          ui_print "Creek-Nethunter v2 Unified";
+          ui_print "Installing system modules...";
+          copy_ak modules/system/lib/modules/ /system/lib/modules/;
+          set_perm_recursive /system/lib/modules root root 644 755;
+          ui_print "Installing vendor modules...";
+          copy_ak modules/vendor/lib/modules/ /vendor/lib/modules/;
+          set_perm_recursive /vendor/lib/modules root root 644 755;
+          ui_print "Installing NHD daemon...";
+          copy_ak system/bin/nhd /system/bin/nhd;
+          set_perm /system/bin/nhd root root 0755;
+          ui_print "Done! Reboot to apply.";
+          AKEOF
+
+          mkdir -p "$AK3/system/bin"
+          cat > "$AK3/system/bin/nhd" << 'NHDEOF'
+          #!/system/bin/sh
+          LOG=/data/nhsystem/nhd.log
+          KO_MON=/system/lib/modules/qca_cld3_wlan.ko
+          KO_STOCK=/vendor_dlkm/lib/modules/qca_cld3_wlan.ko
+          SYSFS_CH=/sys/devices/platform/soc/c800000.qcom,icnss/net/wlan0/monitor_mode_channel
+          SYSFS_TYPE=/sys/class/net/wlan0/type
+          MOD=/system/lib/modules
+          mkdir -p /data/nhsystem
+          log_nhd() { echo "[$(date '+%H:%M:%S')] $1" >> "$LOG"; }
+          ismon() { [ "$(cat $SYSFS_TYPE 2>/dev/null)" = "803" ]; }
+          usb_load() {
+            VID=$(cat /sys/bus/usb/devices/$1/idVendor 2>/dev/null)
+            PID=$(cat /sys/bus/usb/devices/$1/idProduct 2>/dev/null)
+            [ -z "$VID" ] && return
+            log_nhd "USB: ${VID}:${PID}"
+            case "${VID}:${PID}" in
+              0bda:8812) insmod $MOD/rtw_core.ko 2>/dev/null; insmod $MOD/rtw_usb.ko 2>/dev/null; insmod $MOD/rtw_8812au.ko 2>/dev/null; log_nhd "rtw_8812au loaded" ;;
+              0bda:c811) insmod $MOD/rtw_core.ko 2>/dev/null; insmod $MOD/rtw_8821cu.ko 2>/dev/null; log_nhd "rtw_8821cu loaded" ;;
+              0bda:8179) insmod $MOD/rtl8xxxu.ko 2>/dev/null; log_nhd "rtl8xxxu loaded" ;;
+              0cf3:9271) insmod $MOD/ath9k_htc.ko 2>/dev/null; log_nhd "ath9k_htc loaded" ;;
+              148f:7601) insmod $MOD/mt76.ko 2>/dev/null; insmod $MOD/mt7601u.ko 2>/dev/null; log_nhd "mt7601u loaded" ;;
+              1d50:6089) insmod $MOD/hackrf.ko 2>/dev/null; log_nhd "hackrf loaded" ;;
+              0bda:2838) insmod $MOD/rtl2832.ko 2>/dev/null; insmod $MOD/rtl2832_sdr.ko 2>/dev/null; log_nhd "rtl-sdr loaded" ;;
+              10c4:ea60) insmod $MOD/cp210x.ko 2>/dev/null; log_nhd "cp210x loaded" ;;
+              072f:2200) insmod $MOD/pn533.ko 2>/dev/null; insmod $MOD/pn533_usb.ko 2>/dev/null; log_nhd "pn533 loaded" ;;
+              *) log_nhd "USB unknown: ${VID}:${PID}" ;;
+            esac
+          }
+          wifi_mon_on() {
+            ismon && return 0
+            log_nhd "wlan0 -> monitor"
+            svc wifi disable; sleep 3
+            rmmod wlan 2>/dev/null; sleep 1
+            insmod "$KO_MON" con_mode=4; sleep 8
+            ip link set wlan0 up
+            echo "${1:-6} 0" > "$SYSFS_CH"
+            log_nhd "monitor ON ch${1:-6}"
+          }
+          wifi_man_on() {
+            ! ismon && return 0
+            log_nhd "wlan0 -> managed"
+            rmmod wlan 2>/dev/null; sleep 2
+            insmod "$KO_STOCK"; sleep 5
+            svc wifi enable
+            log_nhd "managed ON"
+          }
+          case "$1" in
+            mon) wifi_mon_on "${2:-6}" ;;
+            managed) wifi_man_on ;;
+            ch) ismon && echo "${2:-6} 0" > "$SYSFS_CH" ;;
+            status) ismon && echo "MONITOR" || echo "MANAGED" ;;
+            *)
+              log_nhd "NHD started"
+              PREV=""
+              while true; do
+                CUR=$(ls /sys/bus/usb/devices/ 2>/dev/null | sort | tr '\n' ':')
+                if [ "$CUR" != "$PREV" ]; then
+                  for dev in /sys/bus/usb/devices/*/idVendor; do
+                    dir=$(dirname "$dev"); name=$(basename "$dir")
+                    flag="$dir/.nhd"; [ -f "$flag" ] && continue
+                    touch "$flag"; usb_load "$name" &
+                  done
+                  PREV="$CUR"
+                fi
+                sleep 5
+              done ;;
+          esac
+          NHDEOF
+          chmod 755 "$AK3/system/bin/nhd"
+
+          ZIPNAME="Creek-Nethunter-v2-Unified-$(date '+%Y%m%d-%H%M').zip"
+          cd "$AK3"
+          zip -r9 "${GITHUB_WORKSPACE}/artifacts/${ZIPNAME}" . -x "*.git*"
+          echo "ZIP ready: $ZIPNAME"
+          ls -lah "${GITHUB_WORKSPACE}/artifacts/${ZIPNAME}"
+
+      - name: Collect artifacts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${GITHUB_WORKSPACE}/artifacts/logs"
+          mkdir -p "${GITHUB_WORKSPACE}/artifacts/wlan-modules"
+          mkdir -p "${GITHUB_WORKSPACE}/artifacts/nethunter-modules"
+
+          cp -f "$OUT_DIR/gki_kernel/common/.config" "${GITHUB_WORKSPACE}/artifacts/logs/gki.config" 2>/dev/null || true
+          cp -f "$OUT_DIR/msm-kernel/.config" "${GITHUB_WORKSPACE}/artifacts/logs/msm.config" 2>/dev/null || true
+          cp -f "$OUT_DIR/msm-kernel/Module.symvers" "${GITHUB_WORKSPACE}/artifacts/logs/msm.Module.symvers" 2>/dev/null || true
+
+          for root in "$OUT_DIR/staging" "$OUT_DIR/gki_kernel/common" "$OUT_DIR/msm-kernel"; do
+            [ -d "$root" ] || continue
+            find "$root" -type f -name '*.ko' -printf '%f\n' 2>/dev/null
+          done | sort -u > "${GITHUB_WORKSPACE}/artifacts/logs/built-module-names.txt" || true
+
+          if [ -d "$OUT_DIR/staging" ]; then
+            find "$OUT_DIR/staging" -type f \
+              \( -path '*/wlan/qcacld-3.0/*.ko' \
+                 -o -path '*/nethunter/rtw88/*.ko' \
+                 -o -path '*/nethunter/rtl8xxxu/*.ko' \
+                 -o -name 'mt76*.ko' \
+                 -o -name 'mt7601u.ko' \) \
+              -exec cp -f {} "${GITHUB_WORKSPACE}/artifacts/wlan-modules/" \; 2>/dev/null || true
+          fi
+
+          for root in "$OUT_DIR/staging" "$OUT_DIR/gki_kernel/common" "$OUT_DIR/msm-kernel"; do
+            [ -d "$root" ] || continue
+            find "$root" -type f \
+              \( -name "mt76*.ko" -o -name "cfg80211.ko" \
+                 -o -name "mac80211.ko" -o -name "tcp_bic.ko" \
+                 -o -name "tcp_westwood.ko" -o -name "tcp_htcp.ko" \) \
+              -exec cp -f {} "${GITHUB_WORKSPACE}/artifacts/nethunter-modules/" \; 2>/dev/null || true
+          done
+
+          if [ -d "$DIST_DIR" ]; then
+            for f in Image Image.gz boot.img boot-gz.img init_boot.img vendor_boot.img dtb.img dtbo.img system_dlkm.img vendor_dlkm.img system_dlkm.modules.load vendor_dlkm.modules.load gki-info.txt; do
+              [ -f "$DIST_DIR/$f" ] && cp -f "$DIST_DIR/$f" "${GITHUB_WORKSPACE}/artifacts/" || true
+            done
+            find "$DIST_DIR" -maxdepth 1 -type f \
+              \( -name '*modules.load' -o -name '*modules.blocklist' -o -name '*dtb*.img' \) \
+              -exec cp -f {} "${GITHUB_WORKSPACE}/artifacts/" \; 2>/dev/null || true
+          fi
+
+          echo "=== Artifacts ==="
+          find "${GITHUB_WORKSPACE}/artifacts" -maxdepth 2 -type f -printf '%P %s bytes\n' | sort || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: creek-nethunter-v2-unified
+          path: artifacts/
+          if-no-files-found: warn
