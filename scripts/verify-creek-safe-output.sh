@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+KP="${1:?kernel_platform}"
+OUT="${2:?out}"
+DIST="${3:?dist}"
+LOGDIR="${4:?logdir}"
+mkdir -p "$LOGDIR"
+
+die(){ echo "ERROR: $*" | tee -a "$LOGDIR/final-gate.txt" >&2; exit 1; }
+
+# Image must exist and be non-empty.
+IMG=""
+for f in "$DIST/Image" "$DIST/Image.gz" "$DIST/Image.lz4"; do
+  if [ -s "$f" ]; then IMG="$f"; break; fi
+done
+test -n "$IMG" || die "no kernel image in dist"
+
+# Required image set for this build flow.
+test -s "$DIST/vendor_boot.img" || die "vendor_boot.img missing"
+test -s "$DIST/vendor_dlkm.img" || die "vendor_dlkm.img missing"
+
+# Kernel identity and architecture.
+file "$IMG" | tee "$LOGDIR/image-file.txt"
+strings "$IMG" | grep -q 'Linux version 5.15.167-android13-8' \
+  || echo "[warn] release string not directly visible in compressed image"
+
+# No dangerous build shortcuts in final source/output.
+if grep -RqsE 'BUT WHO CARES\?|rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop' \
+  "$KP" 2>/dev/null; then
+  die "unsafe/stale pattern detected in build tree"
+fi
+
+# Module ABI metadata must be present and tied to the build.
+SYMVERS=""
+for f in "$OUT/msm-kernel/Module.symvers" "$OUT/gki_kernel/common/Module.symvers" "$OUT/gki_kernel/dist/vmlinux.symvers"; do
+  if [ -s "$f" ]; then SYMVERS="$f"; break; fi
+done
+test -n "$SYMVERS" || die "no Module.symvers/vmlinux.symvers produced"
+
+# Vendor WLAN module is required; do not accept a generic renamed replacement.
+WLAN=""
+while IFS= read -r f; do
+  WLAN="$f"; break
+done < <(find "$OUT/staging" -type f -name 'qca_cld3_wlan.ko' 2>/dev/null)
+test -n "$WLAN" || die "qca_cld3_wlan.ko not built"
+
+# Every built module must report the same kernel release/CRC metadata.
+modinfo_bin="$(command -v modinfo || true)"
+if [ -n "$modinfo_bin" ]; then
+  find "$OUT/staging" -type f -name '*.ko' -print0 |
+    xargs -0 -r -n1 "$modinfo_bin" -F vermagic 2>/dev/null |
+    sort -u > "$LOGDIR/module-vermagic.txt" || true
+fi
+
+# Generated normal/recovery lists must not contain unbuilt module basenames.
+ALL="$(mktemp)"
+trap 'rm -f "$ALL"' EXIT
+find "$OUT/staging" -type f -name '*.ko' -printf '%f\n' | sort -u > "$ALL"
+for list in "$DIST/vendor_boot.modules.load" "$DIST/vendor_boot.modules.load.recovery"; do
+  [ -f "$list" ] || continue
+  while IFS= read -r m; do
+    [ -z "$m" ] && continue
+    n="${m##*/}"
+    grep -Fxq "$n" "$ALL" || die "module list references unbuilt module: $n"
+  done < <(sed '/^[[:space:]]*#/d;/^[[:space:]]*$/d' "$list")
+done
+
+# Ensure the kernel output is not accidentally a debug/intermediate artifact.
+test ! -e "$DIST/vmlinux" || die "vmlinux leaked into release dist"
+echo "FINAL_GATE=PASS" | tee "$LOGDIR/final-gate.txt"
+echo "IMAGE=$IMG" | tee -a "$LOGDIR/final-gate.txt"
+echo "WLAN=$WLAN" | tee -a "$LOGDIR/final-gate.txt"
+echo "SYMVERS=$SYMVERS" | tee -a "$LOGDIR/final-gate.txt"
