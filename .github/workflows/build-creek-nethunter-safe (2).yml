@@ -1,0 +1,190 @@
+name: Creek NetHunter Safe Build
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Build jobs; auto is recommended"
+        required: true
+        default: "auto"
+        type: string
+      clean:
+        description: "Clean output before build"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    env:
+      WORK: ${{ github.workspace }}/work
+      KP: ${{ github.workspace }}/work/kernel_platform
+      OUT_DIR: ${{ github.workspace }}/out
+      DIST_DIR: ${{ github.workspace }}/out/dist
+      BUILD_CONFIG: msm-kernel/build.config.msm.creek
+      VARIANT: gki
+      LTO: thin
+      SKIP_MRPROPER: ${{ inputs.clean == false && '1' || '0' }}
+      KERNEL_CMDLINE_CONSOLE_AUTO: "0"
+      EXT_MODULES_MAKEFILE: ${{ github.workspace }}/scripts/creek-external-modules.mk
+      CREEK_DIST_DIR: ${{ github.workspace }}/out/dist
+      MODULES_LIST: ${{ github.workspace }}/stock-modules/vendor_boot.modules.load
+      MODULES_RECOVERY_LIST: ${{ github.workspace }}/stock-modules/vendor_boot.modules.load.recovery
+      BUILD_VENDOR_BOOT_IMG: "1"
+      VENDOR_RAMDISK_BINARY: ${{ github.workspace }}/stock-modules/vendor_boot.ramdisk.lz4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev \
+            libncurses-dev libssl-dev libelf-dev python3 python-is-python3 bc rsync \
+            unzip cpio lz4 xz-utils file dwarves pahole jq ca-certificates binutils lld clang
+          sudo ln -sf "$(command -v ld.lld || command -v ld.bfd)" /usr/local/bin/ld
+
+      - name: Swap
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 16
+
+      - name: Repo tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Sync exact Creek manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK"
+          cd "$WORK"
+          git config --global user.name github-actions
+          git config --global user.email github-actions@github.com
+          repo init -u "https://github.com/${GITHUB_REPOSITORY}.git" \
+            -b "${GITHUB_REF_NAME}" -m kernel_manifest/creek.xml \
+            --repo-rev=stable --depth=1 --no-clone-bundle --no-tags
+          repo sync -c --no-clone-bundle --no-tags --optimized-fetch --fail-fast -j2
+
+      - name: Source safety audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
+
+      - name: Prepare build without ABI bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep existing stock preparation, but never allow it to leave an ABI bypass behind.
+          cp scripts/prepare-creek-stock.sh "$RUNNER_TEMP/prepare-creek-stock.sh"
+          ABI_BEFORE=""
+          for f in "$KP/build/abi/compare_to_symbol_list" "$KP/build/kernel/abi/compare_to_symbol_list"; do
+            if [ -f "$f" ]; then ABI_BEFORE="$(readlink -f "$f")"; break; fi
+          done
+          test -n "$ABI_BEFORE"
+          cp "$ABI_BEFORE" "$RUNNER_TEMP/abi-checker.before"
+          scripts/prepare-creek-stock.sh "$KP"
+          cp "$RUNNER_TEMP/abi-checker.before" "$ABI_BEFORE"
+          ! grep -q 'BUT WHO CARES?' "$ABI_BEFORE"
+          ! grep -Rqs 'BUT WHO CARES?' "$KP/common" "$KP/msm-kernel" || \
+            { echo "ABI bypass leaked into source tree"; exit 1; }
+
+      - name: Apply NetHunter configuration safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The stock enable script is used only after an audit. Baseband Guard is
+          # deliberately excluded from this baseline because it changes LSM policy
+          # and is not required for NetHunter hardware support.
+          cp scripts/enable-creek-nethunter.sh "$RUNNER_TEMP/enable-creek-nethunter.sh"
+          python3 - "$RUNNER_TEMP/enable-creek-nethunter.sh" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1])
+          s=p.read_text()
+          # Remove the optional BBG setup and config mutation from this CI build copy.
+          a=s.find('# Baseband Guard (BBG):')
+          b=s.find('COMMON_DEFCONFIG=', a)
+          if a >= 0 and b > a:
+              s=s[:a]+s[b:]
+          a=s.find('# Baseband Guard LSM.')
+          b=s.find('# BBRv3 and traffic schedulers.', a)
+          if a >= 0 and b > a:
+              s=s[:a]+s[b:]
+          p.write_text(s)
+          PY
+          bash "$RUNNER_TEMP/enable-creek-nethunter.sh" "$KP"
+          ! grep -qs 'CONFIG_BBG' "$KP/common/arch/arm64/configs/nethunter.config"
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
+          cd "$KP"
+          if [ "${{ inputs.jobs }}" = "auto" ]; then JOBS="$(nproc --all)"; else JOBS="${{ inputs.jobs }}"; fi
+          export KERNEL_BUILD_JOBS="$JOBS"
+          export BUILD_CONFIG VARIANT LTO SKIP_MRPROPER KERNEL_CMDLINE_CONSOLE_AUTO
+          export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
+          export BUILD_VENDOR_BOOT_IMG VENDOR_RAMDISK_BINARY
+          build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
+
+      - name: Final safety verification
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify-creek-safe-output.sh "$KP" "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
+
+      - name: Package release artifacts
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/release artifacts/modules
+          # Release package contains only flash/test inputs; no vmlinux, .o, source tree,
+          # Module.symvers, or intermediate build directories.
+          if [ -f "$DIST_DIR/Image" ]; then cp "$DIST_DIR/Image" artifacts/release/Image; fi
+          if [ -f "$DIST_DIR/Image.gz" ]; then cp "$DIST_DIR/Image.gz" artifacts/release/Image.gz; fi
+          if [ -f "$DIST_DIR/vendor_boot.img" ]; then cp "$DIST_DIR/vendor_boot.img" artifacts/release/vendor_boot.img; fi
+          find "$OUT_DIR/staging" -type f -name '*.ko' -exec cp -f {} artifacts/modules/ \; 2>/dev/null || true
+          (cd artifacts/release && sha256sum * > SHA256SUMS)
+          (cd artifacts/modules && sha256sum *.ko > SHA256SUMS 2>/dev/null || true)
+          # Do not label a package as universally flashable. It is a verified build
+          # artifact; device flashing remains gated on matching boot/vendor_boot layout.
+          printf '%s\n' \
+            'Creek NetHunter GKI verified build' \
+            'Kernel family: 5.15.167-android13-8' \
+            'ABI bypass: disabled' \
+            'Runtime WLAN unload/forced con_mode: disabled' \
+            'Baseband Guard: excluded from stable baseline' \
+            'Flash only after device-side boot/vendor_boot/AVB verification.' \
+            > artifacts/release/FLASH-GATE.txt
+          (cd artifacts && zip -r9 ../Creek-Nethunter-gki-verified.zip release >/dev/null)
+          (cd artifacts && zip -r9 ../Creek-Nethunter-adapters-modules.zip modules >/dev/null)
+
+      - name: Upload verified artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: creek-nethunter-safe-build
+          path: |
+            artifacts/logs/
+            Creek-Nethunter-gki-verified.zip
+            Creek-Nethunter-adapters-modules.zip
+          if-no-files-found: warn
