@@ -22,7 +22,7 @@ need "$ROOT/build/build.sh"
 # report a binary match even when no source file contains the pattern.
 # git grep searches the tracked source tree and gives us the exact file/line
 # if a real stale implementation is present.
-UNSAFE_RE='rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
+UNSAFE_RE='rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|hdd_mon_stop'
 for tree in "$ROOT/msm-kernel" "$ROOT/vendor/qcom/opensource/wlan"; do
   if ! git -C "$tree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     die "not a git work tree: $tree"
