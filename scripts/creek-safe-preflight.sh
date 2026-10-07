@@ -14,17 +14,23 @@ need "$ROOT/vendor/qcom/opensource/wlan/qcacld-3.0"
 need "$ROOT/build/build.sh"
 
 # Never permit known unsafe/stale implementation shortcuts in the actual
-# kernel/vendor source tree.  Do NOT scan this repository's audit scripts here: the
-# audit itself necessarily contains the strings it is checking for, and historical
-# helper scripts may mention them as text without executing them.
-# Do not treat generic kernel build comments such as "make -i -k" as an
-# executed unsafe command. The common GKI tree contains such documentation.
-# ABI bypass is checked separately below. Stale/unsafe WLAN implementation
-# patterns are checked only in the device/vendor trees where they can matter.
+# kernel/vendor source tree. Do NOT scan this repository's audit scripts here:
+# the audit itself necessarily contains the strings it is checking for.
+#
+# Use git grep instead of recursive grep. The synced WLAN tree contains
+# firmware/binary blobs and other non-source artifacts; recursive grep can
+# report a binary match even when no source file contains the pattern.
+# git grep searches the tracked source tree and gives us the exact file/line
+# if a real stale implementation is present.
 UNSAFE_RE='rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
 for tree in "$ROOT/msm-kernel" "$ROOT/vendor/qcom/opensource/wlan"; do
-  if grep -RqsE --exclude-dir=.git --exclude=\*.o --exclude=\*.a --exclude=\*.ko "$UNSAFE_RE" "$tree" 2>/dev/null; then
-    die "unsafe/stale kernel or WLAN pattern detected in source: $tree"
+  if ! git -C "$tree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    die "not a git work tree: $tree"
+  fi
+  MATCH="$(git -C "$tree" grep -n -E "$UNSAFE_RE" -- . 2>/dev/null || true)"
+  if [ -n "$MATCH" ]; then
+    echo "$MATCH" >&2
+    die "unsafe/stale kernel or WLAN source pattern detected in: $tree"
   fi
 done
 
