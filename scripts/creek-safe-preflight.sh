@@ -17,8 +17,12 @@ need "$ROOT/build/build.sh"
 # kernel/vendor source tree.  Do NOT scan this repository's audit scripts here: the
 # audit itself necessarily contains the strings it is checking for, and historical
 # helper scripts may mention them as text without executing them.
-UNSAFE_RE='BUT WHO CARES\?|make[[:space:]]+-i([[:space:]]|$)|rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
-for tree in "$ROOT/common" "$ROOT/msm-kernel" "$ROOT/vendor/qcom/opensource/wlan"; do
+# Do not treat generic kernel build comments such as "make -i -k" as an
+# executed unsafe command. The common GKI tree contains such documentation.
+# ABI bypass is checked separately below. Stale/unsafe WLAN implementation
+# patterns are checked only in the device/vendor trees where they can matter.
+UNSAFE_RE='rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
+for tree in "$ROOT/msm-kernel" "$ROOT/vendor/qcom/opensource/wlan"; do
   if grep -RqsE --exclude-dir=.git --exclude=\*.o --exclude=\*.a --exclude=\*.ko "$UNSAFE_RE" "$tree" 2>/dev/null; then
     die "unsafe/stale kernel or WLAN pattern detected in source: $tree"
   fi
