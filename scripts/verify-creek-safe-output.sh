@@ -24,10 +24,30 @@ file "$IMG" | tee "$LOGDIR/image-file.txt"
 strings "$IMG" | grep -q 'Linux version 5.15.167-android13-8' \
   || echo "[warn] release string not directly visible in compressed image"
 
-# No dangerous build shortcuts in final source/output.
-if grep -RqsE 'BUT WHO CARES\?|rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop' \
-  "$KP" 2>/dev/null; then
-  die "unsafe/stale pattern detected in build tree"
+# Do not recursively grep the whole synced kernel tree: each repo contains
+# .git objects/history and generated files, so that can produce false positives
+# from historical patch text. Audit the tracked source trees instead.
+UNSAFE_RE='BUT WHO CARES\?|rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
+for tree in "$KP/common" "$KP/msm-kernel" "$KP/vendor/qcom/opensource/wlan"; do
+  [ -d "$tree" ] || die "required source tree missing: $tree"
+  if ! git -C "$tree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    die "not a git work tree: $tree"
+  fi
+  MATCH="$(git -C "$tree" grep -n -E "$UNSAFE_RE" -- . 2>/dev/null || true)"
+  if [ -n "$MATCH" ]; then
+    echo "$MATCH" >&2
+    die "unsafe/stale pattern detected in tracked source: $tree"
+  fi
+done
+
+# The ABI checker is a real build input, so check its active file explicitly.
+ABI=""
+for f in "$KP/build/abi/compare_to_symbol_list" "$KP/build/kernel/abi/compare_to_symbol_list"; do
+  if [ -f "$f" ]; then ABI="$(readlink -f "$f")"; break; fi
+done
+[ -n "$ABI" ] || die "ABI checker not found"
+if grep -qs 'BUT WHO CARES?' "$ABI"; then
+  die "ABI checker bypass is active"
 fi
 
 # Module ABI metadata must be present and tied to the build.
