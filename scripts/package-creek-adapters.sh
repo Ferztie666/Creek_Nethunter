@@ -23,7 +23,7 @@ done < <(find "$MODROOT" -type f -name '*.ko' -print0)
 declare -A WANT
 QUEUE=()
 
-# Only these trees are adapter drivers. Qualcomm internal WLAN is deliberately
+# These are the external wireless-adapter trees used by the Creek NetHunter baseline. Qualcomm internal WLAN is deliberately
 # excluded from this package.
 while IFS= read -r -d '' f; do
   n="${f##*/}"
@@ -31,7 +31,7 @@ while IFS= read -r -d '' f; do
   WANT["$n"]="driver"
   QUEUE+=("$n")
 done < <(
-  find "$MODROOT/extra/nethunter/rtw88" "$MODROOT/extra/nethunter/rtl8xxxu"     -maxdepth 1 -type f -name '*.ko' -print0 2>/dev/null
+  find "$MODROOT/extra/nethunter/rtw88" "$MODROOT/extra/nethunter/rtl8xxxu"     "$MODROOT/kernel/drivers/net/wireless/mediatek"     -maxdepth 3 -type f -name '*.ko' -print0 2>/dev/null
 )
 
 [ "${#QUEUE[@]}" -gt 0 ] || {
