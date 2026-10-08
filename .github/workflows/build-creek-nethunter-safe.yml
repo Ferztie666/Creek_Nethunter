@@ -5,8 +5,6 @@ permissions:
   actions: read
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       jobs:
@@ -20,9 +18,12 @@ on:
         default: true
         type: boolean
 
+concurrency:
+  group: creek-nethunter-safe-build
+  cancel-in-progress: true
+
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build]') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     env:
@@ -172,7 +173,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
           cd "$KP"
-          if [ "${{ inputs.jobs }}" = "auto" ]; then JOBS="$(nproc --all)"; else JOBS="${{ inputs.jobs }}"; fi
+          if [ "${{ inputs.jobs }}" = "auto" ]; then JOBS=2; else JOBS="${{ inputs.jobs }}"; fi
           export KERNEL_BUILD_JOBS="$JOBS"
           export BUILD_CONFIG VARIANT LTO SKIP_MRPROPER KERNEL_CMDLINE_CONSOLE_AUTO
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
