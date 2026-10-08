@@ -128,8 +128,40 @@ jobs:
               s=s[:a]+s[b:]
           p.write_text(s)
           PY
-          bash "$RUNNER_TEMP/enable-creek-nethunter.sh" "$KP"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/logs"
+          # Do not hide the first failing command. Keep the build strict, but
+          # expose the exact NetHunter patch/config operation that failed.
+          set +e
+          bash -x "$RUNNER_TEMP/enable-creek-nethunter.sh" "$KP" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/nethunter-config.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "ERROR: NetHunter configuration failed (rc=$rc)."
+            echo "---- last 160 lines of nethunter-config.log ----"
+            tail -n 160 "$GITHUB_WORKSPACE/artifacts/logs/nethunter-config.log" || true
+            exit "$rc"
+          fi
           ! grep -qs 'CONFIG_BBG' "$KP/common/arch/arm64/configs/nethunter.config"
+
+      - name: NetHunter post-config audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== NETHUNTER POST-CONFIG AUDIT =="
+          test -f "$KP/common/arch/arm64/configs/nethunter.config"
+          echo "-- selected fragment --"
+          grep -E '^CONFIG_(TCP_CONG_BBR3|DEFAULT_BBR3|DEFAULT_TCP_CONG|SYSVIPC|PID_NS|USER_NS|POSIX_MQUEUE|NET_SCH_FQ|NET_SCH_FQ_CODEL|NET_SCH_CAKE|CAN|USB_SERIAL|IP_SET)=' \
+            "$KP/common/arch/arm64/configs/nethunter.config" || true
+          echo "-- patch state --"
+          for p in gki-ptrace.patch droidspaces-sysvipc-kabi-6-7-8.patch droidspaces-cgroup-prefix.patch bbrv3-android13-5.15.patch; do
+            echo "checking $p"
+            if git -C "$KP/common" apply --reverse --check "$GITHUB_WORKSPACE/patches/common/$p" >/dev/null 2>&1; then
+              echo "APPLIED: $p"
+            else
+              echo "WARNING: could not prove applied state for $p"
+            fi
+          done
+          ! grep -Rqs 'BUT WHO CARES?' "$KP/common" "$KP/msm-kernel"
 
       - name: Build
         shell: bash
