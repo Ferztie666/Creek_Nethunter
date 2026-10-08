@@ -2,7 +2,17 @@
 set -euo pipefail
 
 ROOT=${1:?kernel_platform path is required}
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Optional explicit repository root. This is required when this script is copied
+# to RUNNER_TEMP, because dirname(BASH_SOURCE) is then no longer the checkout.
+if [ "${2:-}" != "" ]; then
+  REPO_ROOT="$(cd "$2" && pwd)"
+else
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+if [ ! -d "$REPO_ROOT/patches/common" ]; then
+  echo "ERROR: repository root does not contain patches/common: $REPO_ROOT" >&2
+  exit 1
+fi
 COMMON="$ROOT/common"
 MSM="$ROOT/msm-kernel"
 PATCH_DIR="$REPO_ROOT/patches/common"
