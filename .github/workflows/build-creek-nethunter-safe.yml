@@ -212,8 +212,8 @@ jobs:
 
           printf '%s\n'             'Creek NetHunter GKI verified build'             'Kernel family: 5.15.167-android13-8'             'ABI bypass: disabled'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
 
-          zip -r9 -q Creek-Nethunter-gki-verified.zip artifacts/release
-          zip -r9 -q Creek-Nethunter-adapters-modules.zip artifacts/modules
+          (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-verified.zip release)
+          (cd artifacts && zip -r9 -q ../Creek-Nethunter-adapters-modules.zip modules)
           unzip -tq Creek-Nethunter-gki-verified.zip
           unzip -tq Creek-Nethunter-adapters-modules.zip
           ls -lh Creek-Nethunter-*.zip
