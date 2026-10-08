@@ -132,7 +132,7 @@ jobs:
           # Do not hide the first failing command. Keep the build strict, but
           # expose the exact NetHunter patch/config operation that failed.
           set +e
-          bash -x "$RUNNER_TEMP/enable-creek-nethunter.sh" "$KP" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/nethunter-config.log"
+          bash -x "$RUNNER_TEMP/enable-creek-nethunter.sh" "$KP" "$GITHUB_WORKSPACE" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/nethunter-config.log"
           rc=${PIPESTATUS[0]}
           set -e
           if [ "$rc" -ne 0 ]; then
