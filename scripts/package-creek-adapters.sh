@@ -109,12 +109,16 @@ fi
   echo
   echo "[driver]"
   for n in "${!WANT[@]}"; do
-    [ "${WANT[$n]}" = driver ] && echo "$n.ko"
+    if [ "${WANT[$n]}" = driver ]; then
+      printf '%s\\n' "$n.ko"
+    fi
   done | sort
   echo
   echo "[dependency]"
   for n in "${!WANT[@]}"; do
-    [ "${WANT[$n]}" = dependency ] && echo "$n.ko"
+    if [ "${WANT[$n]}" = dependency ]; then
+      printf '%s\\n' "$n.ko"
+    fi
   done | sort
 } > "$OUT/MODULE-MANIFEST.txt"
 
