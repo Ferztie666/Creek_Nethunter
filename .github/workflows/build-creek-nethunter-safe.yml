@@ -54,7 +54,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev \
             libncurses-dev libssl-dev libelf-dev python3 python-is-python3 bc rsync \
-            unzip cpio lz4 xz-utils file dwarves pahole jq ca-certificates binutils lld clang
+            unzip cpio lz4 xz-utils file dwarves pahole jq ca-certificates binutils lld clang kmod
           sudo ln -sf "$(command -v ld.lld || command -v ld.bfd)" /usr/local/bin/ld
 
       - name: Swap
@@ -192,32 +192,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf artifacts/release artifacts/modules Creek-Nethunter-gki-verified.zip Creek-Nethunter-adapters-modules.zip
           mkdir -p artifacts/release artifacts/modules
           # Release package contains only kernel test inputs and a deliberately
           # minimal external-adapter module set. Do NOT ship the generated
           # vendor_boot.img: this build still uses historical module-list inputs,
           # so the phone's current Android 16 vendor_boot must remain untouched.
-          if [ -f "$DIST_DIR/Image" ]; then cp "$DIST_DIR/Image" artifacts/release/Image; fi
-          if [ -f "$DIST_DIR/Image.gz" ]; then cp "$DIST_DIR/Image.gz" artifacts/release/Image.gz; fi
-          test -s artifacts/release/Image.gz || test -s artifacts/release/Image
-          bash "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" \
-            "$OUT_DIR/staging" artifacts/modules
-          (cd artifacts/release && sha256sum * > SHA256SUMS)
-          (cd artifacts/modules && sha256sum *.ko > SHA256SUMS 2>/dev/null || true)
-          # Do not label a package as universally flashable. It is a verified build
-          # artifact; device flashing remains gated on matching boot/vendor_boot layout.
-          printf '%s\n' \
-            'Creek NetHunter GKI verified build' \
-            'Kernel family: 5.15.167-android13-8' \
-            'ABI bypass: disabled' \
-            'Runtime WLAN unload/forced con_mode: disabled' \
-            'Baseband Guard: excluded from stable baseline' \
-            'Generated vendor_boot.img is intentionally NOT packaged.' \
-            'Current Android 16 stock vendor_boot must be preserved for the next gate.' \
-            'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.' \
-            > artifacts/release/FLASH-GATE.txt
-          (cd artifacts && zip -r9 ../Creek-Nethunter-gki-verified.zip release >/dev/null)
-          (cd artifacts && zip -r9 ../Creek-Nethunter-adapters-modules.zip modules >/dev/null)
+          test -s "$DIST_DIR/Image"
+          cp "$DIST_DIR/Image" artifacts/release/Image
+          if [ -s "$DIST_DIR/Image.gz" ]; then cp "$DIST_DIR/Image.gz" artifacts/release/Image.gz; fi
+
+          echo "== ADAPTER PACKAGE =="
+          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh"             "$OUT_DIR/staging" artifacts/modules
+          test -s artifacts/modules/MODULE-LIST.txt
+          test ! -e artifacts/modules/qca_cld3_wlan.ko
+
+          (cd artifacts/release && sha256sum -- * > SHA256SUMS)
+          (cd artifacts/modules && sha256sum -- *.ko > SHA256SUMS)
+
+          printf '%s\n'             'Creek NetHunter GKI verified build'             'Kernel family: 5.15.167-android13-8'             'ABI bypass: disabled'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
+
+          zip -r9 -q Creek-Nethunter-gki-verified.zip artifacts/release
+          zip -r9 -q Creek-Nethunter-adapters-modules.zip artifacts/modules
+          unzip -tq Creek-Nethunter-gki-verified.zip
+          unzip -tq Creek-Nethunter-adapters-modules.zip
+          ls -lh Creek-Nethunter-*.zip
+          echo "PACKAGE_RELEASE=PASS"
 
       - name: Upload verified artifacts
         if: success()
