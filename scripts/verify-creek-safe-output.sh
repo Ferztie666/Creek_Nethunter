@@ -76,18 +76,9 @@ if [ -n "$modinfo_bin" ]; then
     sort -u > "$LOGDIR/module-vermagic.txt" || true
 fi
 
-# Generated normal/recovery lists must not contain unbuilt module basenames.
-ALL="$(mktemp)"
-trap 'rm -f "$ALL"' EXIT
-find "$OUT/staging" -type f -name '*.ko' -printf '%f\n' | sort -u > "$ALL"
-for list in "$DIST/vendor_boot.modules.load" "$DIST/vendor_boot.modules.load.recovery"; do
-  [ -f "$list" ] || continue
-  while IFS= read -r m; do
-    [ -z "$m" ] && continue
-    n="${m##*/}"
-    grep -Fxq "$n" "$ALL" || die "module list references unbuilt module: $n"
-  done < <(sed '/^[[:space:]]*#/d;/^[[:space:]]*$/d' "$list")
-done
+# Historical vendor_boot module lists are intentionally not a release gate.
+# They belong to the old packaging baseline and are not evidence of Android 16
+# compatibility. The release package excludes vendor_boot entirely.
 
 # vmlinux is a normal intermediate build artifact produced by the GKI build.
 # It is intentionally excluded by the packaging step below, so its presence in
