@@ -27,16 +27,26 @@ strings "$IMG" | grep -q 'Linux version 5.15.167-android13-8' \
 # Do not recursively grep the whole synced kernel tree: each repo contains
 # .git objects/history and generated files, so that can produce false positives
 # from historical patch text. Audit the tracked source trees instead.
-UNSAFE_RE='BUT WHO CARES\?|rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4|ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
+# Audit executable/source patterns by file type. Documentation and historical notes can
+# legitimately mention commands such as "rmmod wlan" or "con_mode=4"; those are
+# not evidence that the build tree executes them. Stale QCACLD API names, however,
+# are checked only in C/H source where their presence would affect compilation.
+UNSAFE_SOURCE_RE='ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
+UNSAFE_RUNTIME_RE='rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4'
 for tree in "$KP/common" "$KP/msm-kernel" "$KP/vendor/qcom/opensource/wlan"; do
   [ -d "$tree" ] || die "required source tree missing: $tree"
   if ! git -C "$tree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     die "not a git work tree: $tree"
   fi
-  MATCH="$(git -C "$tree" grep -n -E "$UNSAFE_RE" -- . 2>/dev/null || true)"
+  MATCH="$(git -C "$tree" grep -n -E "$UNSAFE_SOURCE_RE" -- '*.c' '*.h' '*.cc' '*.cpp' '*.S' 2>/dev/null || true)"
   if [ -n "$MATCH" ]; then
     echo "$MATCH" >&2
-    die "unsafe/stale pattern detected in tracked source: $tree"
+    die "stale QCACLD API pattern detected in C/H source: $tree"
+  fi
+  MATCH="$(git -C "$tree" grep -n -E "$UNSAFE_RUNTIME_RE" -- '*.sh' '*.rc' 2>/dev/null || true)"
+  if [ -n "$MATCH" ]; then
+    echo "$MATCH" >&2
+    die "unsafe runtime WLAN switching pattern detected in scripts: $tree"
   fi
 done
 
