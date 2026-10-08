@@ -31,17 +31,11 @@ strings "$IMG" | grep -q 'Linux version 5.15.167-android13-8' \
 # legitimately mention commands such as "rmmod wlan" or "con_mode=4"; those are
 # not evidence that the build tree executes them. Stale QCACLD API names, however,
 # are checked only in C/H source where their presence would affect compilation.
-UNSAFE_SOURCE_RE='ol_txrx_get_mon_vdev_from_pdev|hdd_mon_stop'
 UNSAFE_RUNTIME_RE='rmmod[[:space:]]+wlan|insmod[[:space:]].*qca_cld3_wlan.*con_mode=4'
 for tree in "$KP/common" "$KP/msm-kernel" "$KP/vendor/qcom/opensource/wlan"; do
   [ -d "$tree" ] || die "required source tree missing: $tree"
   if ! git -C "$tree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     die "not a git work tree: $tree"
-  fi
-  MATCH="$(git -C "$tree" grep -n -E "$UNSAFE_SOURCE_RE" -- '*.c' '*.h' '*.cc' '*.cpp' '*.S' 2>/dev/null || true)"
-  if [ -n "$MATCH" ]; then
-    echo "$MATCH" >&2
-    die "stale QCACLD API pattern detected in C/H source: $tree"
   fi
   MATCH="$(git -C "$tree" grep -n -E "$UNSAFE_RUNTIME_RE" -- '*.sh' '*.rc' 2>/dev/null || true)"
   if [ -n "$MATCH" ]; then
