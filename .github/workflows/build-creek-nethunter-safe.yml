@@ -5,6 +5,8 @@ permissions:
   actions: read
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       jobs:
@@ -20,6 +22,7 @@ on:
 
 jobs:
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build]') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     env:
@@ -189,12 +192,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/release artifacts/modules
-          # Release package contains only flash/test inputs; no vmlinux, .o, source tree,
-          # Module.symvers, or intermediate build directories.
+          # Release package contains only kernel test inputs and a deliberately
+          # minimal external-adapter module set. Do NOT ship the generated
+          # vendor_boot.img: this build still uses historical module-list inputs,
+          # so the phone's current Android 16 vendor_boot must remain untouched.
           if [ -f "$DIST_DIR/Image" ]; then cp "$DIST_DIR/Image" artifacts/release/Image; fi
           if [ -f "$DIST_DIR/Image.gz" ]; then cp "$DIST_DIR/Image.gz" artifacts/release/Image.gz; fi
-          if [ -f "$DIST_DIR/vendor_boot.img" ]; then cp "$DIST_DIR/vendor_boot.img" artifacts/release/vendor_boot.img; fi
-          find "$OUT_DIR/staging" -type f -name '*.ko' -exec cp -f {} artifacts/modules/ \; 2>/dev/null || true
+          test -s artifacts/release/Image.gz || test -s artifacts/release/Image
+          bash "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" \
+            "$OUT_DIR/staging" artifacts/modules
           (cd artifacts/release && sha256sum * > SHA256SUMS)
           (cd artifacts/modules && sha256sum *.ko > SHA256SUMS 2>/dev/null || true)
           # Do not label a package as universally flashable. It is a verified build
@@ -205,7 +211,9 @@ jobs:
             'ABI bypass: disabled' \
             'Runtime WLAN unload/forced con_mode: disabled' \
             'Baseband Guard: excluded from stable baseline' \
-            'Flash only after device-side boot/vendor_boot/AVB verification.' \
+            'Generated vendor_boot.img is intentionally NOT packaged.' \
+            'Current Android 16 stock vendor_boot must be preserved for the next gate.' \
+            'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.' \
             > artifacts/release/FLASH-GATE.txt
           (cd artifacts && zip -r9 ../Creek-Nethunter-gki-verified.zip release >/dev/null)
           (cd artifacts && zip -r9 ../Creek-Nethunter-adapters-modules.zip modules >/dev/null)
