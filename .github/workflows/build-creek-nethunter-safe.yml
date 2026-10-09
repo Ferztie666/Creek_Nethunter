@@ -195,8 +195,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf artifacts/release artifacts/modules Creek-Nethunter-gki-verified.zip Creek-Nethunter-adapters-modules.zip
-          mkdir -p artifacts/release artifacts/modules
+          rm -rf artifacts/release artifacts/modules artifacts/adapter-module Creek-Nethunter-gki-verified.zip Creek-Nethunter-adapters-modules.zip
+          mkdir -p artifacts/release artifacts/modules artifacts/adapter-module/system/bin artifacts/adapter-module/system/lib/modules/nethunter
           # Release package contains only kernel test inputs and a deliberately
           # minimal external-adapter module set. Do NOT ship the generated
           # vendor_boot.img: this build still uses historical module-list inputs,
@@ -210,10 +210,30 @@ jobs:
           test -s artifacts/modules/MODULE-LIST.txt
           test ! -e artifacts/modules/qca_cld3_wlan.ko
 
+          # Package adapter drivers as a Magisk module, but never load them at boot.
+          # There is no service.sh; loading is explicit via /system/bin/nhd.
+          cp -a artifacts/modules/. artifacts/adapter-module/system/lib/modules/nethunter/
+          cp scripts/nhd artifacts/adapter-module/system/bin/nhd
+          cp scripts/nh-load.sh artifacts/adapter-module/system/bin/nh-load.sh
+          cat > artifacts/adapter-module/module.prop <<'EOF_MODULE'
+          id=creek_nethunter_adapters
+          name=Creek NetHunter Adapter Modules (On-Demand)
+          version=0.1.0
+          versionCode=100
+          author=Ferztie666
+          description=External adapter modules loaded only when explicitly requested; no boot-time module loading
+          EOF_MODULE
+          cat > artifacts/adapter-module/customize.sh <<'EOF_CUSTOMIZE'
+          # Permission setup only; deliberately does not load any modules.
+          set_perm "$MODPATH/system/bin/nhd" 0 0 0755
+          set_perm "$MODPATH/system/bin/nh-load.sh" 0 0 0755
+          set_perm_recursive "$MODPATH/system/lib/modules/nethunter" 0 0 0755 0644
+          EOF_CUSTOMIZE
           (cd artifacts/release && sha256sum -- * > SHA256SUMS)
           (cd artifacts/modules && sha256sum -- *.ko > SHA256SUMS)
+          (cd artifacts/adapter-module && zip -r9 -q "$GITHUB_WORKSPACE/Creek-Nethunter-adapters-modules.zip" .)
 
-          printf '%s\n'             'Creek NetHunter GKI verified build'             'Kernel family: 5.15.167-android13-8'             'ABI checker bypass: active (upstream compatibility workaround)'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'ABI/KMI compatibility is NOT verified by this build because the upstream ABI checker bypass is active.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
+          printf '%s\n'             'Creek NetHunter GKI build candidate (ABI/KMI unverified)'             'Kernel family: 5.15.167-android13-8'             'ABI checker bypass: active (upstream compatibility workaround)'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'ABI/KMI compatibility is NOT verified by this build because the upstream ABI checker bypass is active.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
 
           # Keep the patched internal Qualcomm WLAN driver separate from USB adapters.
           # This is an audit/test payload only: do not install or flash it until the
@@ -233,7 +253,6 @@ jobs:
           } > artifacts/internal-wlan/INSTALL-GATE.txt
           (cd artifacts/internal-wlan && sha256sum -- qca_cld3_wlan.ko > SHA256SUMS)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-verified.zip release)
-          (cd artifacts && zip -r9 -q ../Creek-Nethunter-adapters-modules.zip modules)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-internal-wlan-audit.zip internal-wlan)
           unzip -tq Creek-Nethunter-gki-verified.zip
           unzip -tq Creek-Nethunter-adapters-modules.zip
