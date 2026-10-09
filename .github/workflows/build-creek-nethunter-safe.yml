@@ -149,8 +149,8 @@ jobs:
             exit "$rc"
           fi
           ! grep -qs 'CONFIG_BBG' "$KP/common/arch/arm64/configs/nethunter.config"
-          bash scripts/enable-creek-adapter-configs.sh "$KP" "$GITHUB_WORKSPACE/artifacts/logs/adapter-config-status.txt"
           bash -n scripts/enable-creek-adapter-configs.sh
+          bash scripts/enable-creek-adapter-configs.sh "$KP" "$GITHUB_WORKSPACE/artifacts/logs/adapter-config-status.txt"
 
       - name: NetHunter post-config audit
         shell: bash
