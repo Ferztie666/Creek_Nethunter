@@ -1,0 +1,4 @@
+#!/system/bin/sh
+# On-demand module manager; intentionally no boot-time hook.
+BASE="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
+exec "$BASE/nh-load.sh" "$@"
