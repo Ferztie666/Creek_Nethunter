@@ -91,6 +91,23 @@ for n in "${!WANT[@]}"; do
   esac
 done
 
+# Final per-target status: no target silently disappears from the ZIP. The
+# internal Qualcomm wlan0 module is intentionally separated into the audit ZIP.
+: > "$OUT/MODULE-STATUS.txt"
+while IFS= read -r line; do
+  line="${line%%#*}"
+  line="$(printf '%s' "$line" | tr -d '[:space:]' | tr '-' '_')"
+  [ -n "$line" ] || continue
+  if [ "$line" = qca_cld3_wlan ]; then
+    printf '%s\t%s\t%s\n' "$line.ko" "SKIPPED_RISK" "Internal wlan0 driver remains in separate audit-only ZIP pending device ABI/recovery validation" >> "$OUT/MODULE-STATUS.txt"
+  elif find "$OUT" -maxdepth 1 -type f -name '*.ko' -printf '%f\n' | sed 's/\.ko$//' | tr '-' '_' | grep -qx "$line"; then
+    printf '%s\t%s\t%s\n' "$line.ko" "PACKAGED" "Present in adapter ZIP; not yet tested on physical adapter" >> "$OUT/MODULE-STATUS.txt"
+  else
+    printf '%s\t%s\t%s\n' "$line.ko" "NOT_BUILT_OR_BUILTIN" "No loadable .ko with this module name in staging/package; see adapter-config-status.txt" >> "$OUT/MODULE-STATUS.txt"
+  fi
+done < "$TARGETS"
+sort -u "$OUT/MODULE-STATUS.txt" -o "$OUT/MODULE-STATUS.txt"
+
 # Emit a dependency map for on-demand loading. The Android-side helper
 # loads dependencies recursively only when a user/tool explicitly requests a
 # driver; it is never installed as a boot-time service.
