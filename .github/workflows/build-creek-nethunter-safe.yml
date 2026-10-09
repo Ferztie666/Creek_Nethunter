@@ -88,6 +88,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          bash -n scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh
+          sh -n scripts/nhd scripts/nh-load.sh
           bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
 
       - name: Prepare build without ABI bypass
