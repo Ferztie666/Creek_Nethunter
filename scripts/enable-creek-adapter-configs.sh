@@ -146,7 +146,8 @@ creek_nethunter_apply_adapter_config() {
   make "${TOOL_ARGS[@]}" O="${OUT_DIR}" "${MAKE_ARGS[@]}" olddefconfig
   echo "[creek-nethunter] adapter fragment merged after stock defconfig check"
 }
-POST_DEFCONFIG_CMDS="''' + post + '''"
+POST_DEFCONFIG_CMDS="__POST_COMMANDS__"
 """
+s=s.replace("__POST_COMMANDS__", post)
 p.write_text(s)
 PY_BUILD_CONFIG
