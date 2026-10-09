@@ -1,0 +1,163 @@
+# Creek NetHunter adapter/module targets requested by the project owner.
+# One canonical Linux module name per line. This is a target inventory, not a
+# claim that every driver exists in this kernel source or is built.
+# QCACLD is intentionally audit-only: never ship it in the USB adapter package
+# because it is the phone's internal wlan0 driver and is not device-ABI verified.
+# The packaging report records every target as PACKAGED, NOT_BUILT, or SKIPPED_RISK.
+# WIFI: RTW88
+mac80211
+rtw_core
+rtw_usb
+rtw_sdio
+rtw_pci
+rtw_88xxa
+rtw_8812a
+rtw_8812au
+rtw_8812ae
+rtw_8821a
+rtw_8821au
+rtw_8821c
+rtw_8821cu
+rtw_8821ce
+rtw_8821cs
+rtw_8821ae
+rtw_8822b
+rtw_8822bu
+rtw_8822be
+rtw_8822bs
+rtw_8822c
+rtw_8822cu
+rtw_8822ce
+rtw_8822cs
+rtw_8723d
+rtw_8723du
+rtw_8723ds
+rtw_8723de
+rtw_8723cs
+rtw_8723x
+rtw_8703b
+rtw_8814a
+rtw_8814au
+rtw_8814ae
+# WIFI: RTL8XXXU
+rtl8xxxu
+# WIFI: MT76
+mt76
+mt76_usb
+mt76_connac_lib
+mt76x0_common
+mt76x0u
+mt76x02_lib
+mt76x02_usb
+mt76x2_common
+mt76x2u
+mt7601u
+mt7603e
+mt7615e
+mt7615_common
+mt7663u
+mt7663_usb_sdio_common
+mt7915e
+mt7921e
+# WIFI: QCACLD is intentionally not part of adapters-modules.zip
+qca_cld3_wlan
+# WIFI: additional USB drivers
+ath9k_htc
+carl9170
+rt2800usb
+rt73usb
+zd1211rw
+# SDR
+hackrf
+airspy
+rtl2832
+rtl2832_sdr
+rtl2830
+mn88473
+dvb_usb_rtl28xxu
+# USB serial
+cp210x
+usb_wwan
+# NFC
+nfc
+nfc_nci
+nfc_llcp
+nfc_digital
+nfc_hci
+nfc_shdlc
+pn533
+pn533_usb
+# Infrared
+rc_core
+lirc_dev
+ir_lirc_codec
+ir_nec_decoder
+ir_rc5_decoder
+ir_rc6_decoder
+ir_sony_decoder
+ir_jvc_decoder
+ir_sanyo_decoder
+# 1-Wire
+wire
+ds2490
+w1_therm
+w1_ds2431
+w1_ds2433
+w1_ds2408
+# CAN
+can_isotp
+can_j1939
+slcan
+can_gw
+vcan
+# USB gadget / input
+usb_f_hid
+usb_f_mass_storage
+usb_f_serial
+usb_f_ecm
+g_multi
+uinput
+evdev
+# Networking
+dummy
+ifb
+macvlan
+ipvlan
+vxlan
+geneve
+ip6_tunnel
+sit
+batman_adv
+nf_conntrack
+xt_conntrack
+nf_tables
+openvswitch
+usbmon
+nlmon
+pktgen
+fuse
+# Traffic control / diagnostics
+cls_u32
+cls_flower
+cls_bpf
+act_mirred
+act_bpf
+sch_netem
+sch_tbf
+packet_diag
+# Bluetooth
+bt_6lowpan
+bt_hs
+# IoT / IEEE 802.15.4
+mac802154
+ieee802154_6lowpan
+wpan_phy
+# Crypto API
+af_alg
+algif_hash
+algif_skcipher
+algif_aead
+algif_rng
+crypto_user
+# Performance
+cpu_boost
