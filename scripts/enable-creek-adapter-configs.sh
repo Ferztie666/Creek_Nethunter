@@ -86,7 +86,12 @@ for name in sorted(set(names)):
         if candidate in msyms: found=(candidate,msyms[candidate]); tree="msm"; break
         if candidate in csyms: found=(candidate,csyms[candidate]); tree="common"; break
     if not found:
-        rows.append((name+".ko","NO_KCONFIG_SYMBOL","not enabled; source/build availability must be verified"))
+        if name == "rtl8xxxu" or name.startswith("rtw_"):
+            rows.append((name+".ko","EXTERNAL_BUILD_TARGET",
+                         "handled by scripts/creek-external-modules.mk; actual module availability is decided from staged build output"))
+        else:
+            rows.append((name+".ko","NO_KCONFIG_SYMBOL",
+                         "no matching Kconfig symbol in the pinned common/MSM source scan; verify source availability in MODULE-STATUS.txt"))
         continue
     symbol, defs=found
     # Use first definition and its type; bool symbols must be built-in.
