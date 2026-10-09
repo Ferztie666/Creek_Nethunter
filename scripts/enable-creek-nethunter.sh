@@ -245,42 +245,9 @@ $CFG \
   -e CONFIG_NFSD_V4 \
   -d CONFIG_RPCSEC_GSS_KRB5
 
-# MSM-only wireless drivers are configured in the MSM gki_defconfig, matching
-# nullptr's module action. They must not be merged into common GKI: cfg80211
-# and mac80211 are MSM-side modules for Creek.
-MSM_GKI_DEFCONFIG="$MSM/arch/arm64/configs/gki_defconfig"
-if [ ! -x "$MSM/scripts/config" ]; then
-  echo "ERROR: scripts/config not found or not executable in MSM source" >&2
-  exit 1
-fi
-if [ ! -f "$MSM_GKI_DEFCONFIG" ]; then
-  echo "ERROR: MSM gki_defconfig not found: $MSM_GKI_DEFCONFIG" >&2
-  exit 1
-fi
-MSM_CFG="$MSM/scripts/config --file $MSM_GKI_DEFCONFIG"
-
-# Match nullptr's MSM module action: write these settings to the MSM primary
-# gki_defconfig, never to vendor/creek_GKI.config. CFG80211/MAC80211 remain
-# modules; MAC80211_LEDS and RC_MINSTREL are boolean features and are y.
-$MSM_CFG \
-  --keep-case \
-  -m CONFIG_MAC80211 \
-  -e CONFIG_WLAN_VENDOR_REALTEK \
-  -e CONFIG_WLAN_VENDOR_MEDIATEK \
-  -e CONFIG_MAC80211_LEDS \
-  -e CONFIG_MAC80211_RC_MINSTREL \
-  -m CONFIG_CAN_SLCAN \
-  -m CONFIG_MT7601U \
-  -m CONFIG_MT76x0U \
-  -m CONFIG_MT76x2U \
-  -m CONFIG_MT7603E \
-  -m CONFIG_MT7615E \
-  -m CONFIG_MT7663U \
-  -m CONFIG_MT7915E \
-  -m CONFIG_MT7921E
-
-# Keep the common GKI defconfig untouched. Its NetHunter fragment is merged
-# by the inner GKI build; MSM module settings above belong to MSM gki_defconfig.
+# Do not mutate MSM gki_defconfig: Creek's merged-defconfig check requires
+# the stock baseline to remain unchanged. MSM WLAN/adapter options are added
+# later by enable-creek-adapter-configs.sh as a post-check config fragment.
 VENDOR_BUILD_CONFIG="$MSM/build.config.msm.creek"
 if [ ! -f "$VENDOR_BUILD_CONFIG" ]; then
   echo "ERROR: Creek vendor build config not found: $VENDOR_BUILD_CONFIG" >&2
