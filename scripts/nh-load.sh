@@ -32,9 +32,9 @@ loaded(){ n="$(norm "$1")"; [ -d "/sys/module/$n" ] && return 0; awk -v n="$n" '
 module_path(){
  n="$(norm "$1")"
  while IFS= read -r line; do
-   case "$line" in ""|\\#*) continue;; esac
+   case "$line" in ""|\#*) continue;; esac
    name="${line%.ko}"
-   if [ "$(norm "$name")" = "$n" ]; then printf '%s/%s\\n' "$BASE" "$line"; return 0; fi
+   if [ "$(norm "$name")" = "$n" ]; then printf '%s/%s\n' "$BASE" "$line"; return 0; fi
  done < "$MODLIST"
  return 1
 }
