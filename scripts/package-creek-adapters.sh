@@ -104,7 +104,28 @@ done
 sort -o "$OUT/MODULE-DEPENDS.txt" "$OUT/MODULE-DEPENDS.txt"
 cp "$SCRIPT_ROOT/scripts/nhd" "$OUT/nhd"
 cp "$SCRIPT_ROOT/scripts/nh-load.sh" "$OUT/nh-load.sh"
-printf '%s\n' "${MODROOT##*/}" > "$OUT/KERNEL-RELEASE"
+# Bind the package to the exact release string embedded in the built modules.
+# The staging directory name may omit the Android release suffix, so do not
+# use MODROOT's basename as a substitute for vermagic.
+command -v modinfo >/dev/null 2>&1 || {
+  echo "ERROR: modinfo is required to verify adapter module vermagic" >&2
+  exit 1
+}
+KERNEL_RELEASE=""
+for n in "${!WANT[@]}"; do
+  f="${BY_NAME[$n]:-}"
+  [ -n "$f" ] || continue
+  vm="$(modinfo -F vermagic "$f" 2>/dev/null | awk 'NR==1 {print $1}')"
+  [ -n "$vm" ] || { echo "ERROR: missing vermagic for $n" >&2; exit 1; }
+  if [ -z "$KERNEL_RELEASE" ]; then
+    KERNEL_RELEASE="$vm"
+  elif [ "$KERNEL_RELEASE" != "$vm" ]; then
+    echo "ERROR: mixed adapter vermagic: $n has $vm, expected $KERNEL_RELEASE" >&2
+    exit 1
+  fi
+done
+[ -n "$KERNEL_RELEASE" ] || { echo "ERROR: no module vermagic found" >&2; exit 1; }
+printf '%s\n' "$KERNEL_RELEASE" > "$OUT/KERNEL-RELEASE"
 chmod 0755 "$OUT/nhd" "$OUT/nh-load.sh"
 cat > "$OUT/ON-DEMAND-LOADING.txt" <<'EOF_ON_DEMAND'
 NetHunter adapter modules: on-demand loading only
