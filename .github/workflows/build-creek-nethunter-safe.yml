@@ -195,7 +195,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf artifacts/release artifacts/modules artifacts/adapter-module Creek-Nethunter-gki-verified.zip Creek-Nethunter-adapters-modules.zip
+          rm -rf artifacts/release artifacts/modules artifacts/adapter-module Creek-Nethunter-gki-candidate.zip Creek-Nethunter-adapters-modules.zip
           mkdir -p artifacts/release artifacts/modules artifacts/adapter-module/system/bin artifacts/adapter-module/system/lib/modules/nethunter
           # Release package contains only kernel test inputs and a deliberately
           # minimal external-adapter module set. Do NOT ship the generated
@@ -252,23 +252,23 @@ jobs:
             echo "Do not force con_mode or unload WLAN at boot."
           } > artifacts/internal-wlan/INSTALL-GATE.txt
           (cd artifacts/internal-wlan && sha256sum -- qca_cld3_wlan.ko > SHA256SUMS)
-          (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-verified.zip release)
+          (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-candidate.zip release)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-internal-wlan-audit.zip internal-wlan)
-          unzip -tq Creek-Nethunter-gki-verified.zip
+          unzip -tq Creek-Nethunter-gki-candidate.zip
           unzip -tq Creek-Nethunter-adapters-modules.zip
           unzip -tq Creek-Nethunter-internal-wlan-audit.zip
           ls -lh Creek-Nethunter-*.zip
           echo "INTERNAL_WLAN_AUDIT_PACKAGE=PASS"
           echo "PACKAGE_RELEASE=PASS"
 
-      - name: Upload verified artifacts
+      - name: Upload candidate artifacts
         if: success()
         uses: actions/upload-artifact@v6
         with:
           name: creek-nethunter-safe-build
           path: |
             artifacts/logs/
-            Creek-Nethunter-gki-verified.zip
+            Creek-Nethunter-gki-candidate.zip
             Creek-Nethunter-adapters-modules.zip
             Creek-Nethunter-internal-wlan-audit.zip
           if-no-files-found: warn
