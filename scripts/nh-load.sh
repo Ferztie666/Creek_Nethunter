@@ -29,8 +29,20 @@ INS="$(command -v insmod 2>/dev/null || true)"
 [ -n "$INS" ] || { echo "ERROR: insmod not found" >&2; exit 1; }
 norm(){ printf '%s' "$1" | tr '-' '_'; }
 loaded(){ n="$(norm "$1")"; [ -d "/sys/module/$n" ] && return 0; awk -v n="$n" '{m=$1;gsub(/-/,"_",m);if(m==n)f=1}END{exit !f}' /proc/modules 2>/dev/null; }
-present(){ n="$(norm "$1")"; awk -v n="$n" '$0==n".ko"{f=1}END{exit !f}' "$MODLIST"; }
-deps(){ n="$(norm "$1")"; [ ! -r "$DEPMAP" ] || awk -F: -v n="$n" '$1==n{print $2;f=1}END{if(!f)exit 0}' "$DEPMAP"; }
+module_path(){
+ n="$(norm "$1")"
+ while IFS= read -r line; do
+   case "$line" in ""|\\#*) continue;; esac
+   name="${line%.ko}"
+   if [ "$(norm "$name")" = "$n" ]; then printf '%s/%s\\n' "$BASE" "$line"; return 0; fi
+ done < "$MODLIST"
+ return 1
+}
+present(){ module_path "$1" >/dev/null 2>&1; }
+deps(){
+ n="$(norm "$1")"
+ [ ! -r "$DEPMAP" ] || awk -F: -v n="$n" '{key=$1;gsub(/-/,"_",key);if(key==n){print $2;f=1}}END{if(!f)exit 0}' "$DEPMAP"
+}
 SEEN=" "
 load_one(){
  n="$(norm "$1")"
@@ -45,7 +57,8 @@ load_one(){
      echo "ERROR: dependency $d for $n is neither loaded nor packaged" >&2; return 1
    fi
  done
- "$INS" "$BASE/$n.ko"
+ module_file="$(module_path "$n")"
+ "$INS" "$module_file"
  loaded "$n" || echo "WARNING: insmod succeeded but module visibility is delayed: $n" >&2
  echo "LOADED=$n"
  SEEN="$(printf '%s' "$SEEN" | sed "s/ $n / /")"
