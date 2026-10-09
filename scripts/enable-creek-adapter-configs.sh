@@ -19,7 +19,12 @@ common, msm, nhcfg, msmcfg, fragment, report = map(Path, sys.argv[1:])
 # Module basename -> Kconfig symbol. Symbols not listed here are derived from
 # the module name; this map handles names whose Kconfig symbols differ.
 aliases = {
- "mac80211":"MAC80211", "rtw_core":"RTW88_CORE", "rtw_usb":"RTW88_USB",
+ "mac80211":"MAC80211", "mt76":"MT76_CORE", "mt76_usb":"MT76_USB", "mt76_connac_lib":"MT76_CONNAC_LIB",
+ "mt76x0_common":"MT76x0_COMMON", "mt76x0u":"MT76x0U", "mt76x02_lib":"MT76x02_LIB", "mt76x02_usb":"MT76x02_USB",
+ "mt76x2_common":"MT76x2_COMMON", "mt76x2u":"MT76x2U", "mt7601u":"MT7601U", "mt7603e":"MT7603E",
+ "mt7615e":"MT7615E", "mt7615_common":"MT7615_COMMON", "mt7663u":"MT7663U",
+ "mt7663_usb_sdio_common":"MT7663_USB_SDIO_COMMON", "mt7915e":"MT7915E", "mt7921e":"MT7921E",
+ "rtw_core":"RTW88_CORE", "rtw_usb":"RTW88_USB",
  "rtw_sdio":"RTW88_SDIO", "rtw_pci":"RTW88_PCI",
  "hackrf":"USB_HACKRF", "airspy":"USB_AIRSPY", "rtl2832":"DVB_RTL2832",
  "rtl2830":"DVB_RTL2830", "mn88473":"DVB_MN88473",
@@ -68,7 +73,7 @@ def symbols_in(root):
         except OSError: continue
         current=None
         for line in lines:
-            m=re.match(r"\s*(?:menuconfig|config)\s+([A-Z0-9_]+)\s*$",line)
+            m=re.match(r"\s*(?:menuconfig|config)\s+([A-Za-z0-9_]+)\s*$",line)
             if m: current=m.group(1); out.setdefault(current,[]).append((p,[])); continue
             if current and out[current]:
                 path, body=out[current][-1]
@@ -111,6 +116,11 @@ for name in sorted(set(names)):
             rows.append((name+".ko","CONFIG_TOOL_MISSING",str(config_tool))); continue
         subprocess.run([str(config_tool),"--file",str(nhcfg),typ,"CONFIG_"+symbol],check=True)
         rows.append((name+".ko","REQUESTED_"+("MODULE" if tristate else "BUILTIN"),f"CONFIG_{symbol} in common NetHunter fragment"))
+for symbol in ("WLAN_VENDOR_REALTEK","WLAN_VENDOR_MEDIATEK","MAC80211_LEDS","MAC80211_RC_MINSTREL"):
+    if symbol in msyms:
+        fragment_symbols.setdefault(symbol, "y")
+    else:
+        rows.append(("kernel-config:"+symbol,"NO_KCONFIG_SYMBOL","required MSM WLAN feature symbol not found"))
 fragment.write_text("# Creek NetHunter adapter requests; merged after stock defconfig checks.\n"+"".join(f"CONFIG_{sym}={value}\n" for sym,value in sorted(fragment_symbols.items())))
 report.write_text("module\tstatus\tdetail\n"+"".join("\t".join(r)+"\n" for r in rows))
 print(f"[adapter-config] requested={len(rows)} report={report} msm_symbols={len(fragment_symbols)} fragment={fragment}")
