@@ -101,12 +101,14 @@ jobs:
             if [ -f "$f" ]; then ABI_BEFORE="$(readlink -f "$f")"; break; fi
           done
           test -n "$ABI_BEFORE"
-          cp "$ABI_BEFORE" "$RUNNER_TEMP/abi-checker.before"
-          scripts/prepare-creek-stock.sh "$KP"
-          cp "$RUNNER_TEMP/abi-checker.before" "$ABI_BEFORE"
+          sha256sum "$ABI_BEFORE" > "$RUNNER_TEMP/abi-checker.before.sha256"
           ! grep -q 'BUT WHO CARES?' "$ABI_BEFORE"
+          scripts/prepare-creek-stock.sh "$KP"
+          # Do not restore over a modified checker: prove preparation left the
+          # authoritative ABI gate byte-for-byte unchanged.
+          sha256sum -c "$RUNNER_TEMP/abi-checker.before.sha256"
           ! grep -Rqs 'BUT WHO CARES?' "$KP/common" "$KP/msm-kernel" || \
-            { echo "ABI bypass leaked into source tree"; exit 1; }
+            { echo "ABI bypass marker found in source tree"; exit 1; }
 
       - name: Apply NetHunter configuration safely
         shell: bash
