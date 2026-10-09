@@ -196,7 +196,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf artifacts/release artifacts/modules artifacts/adapter-module Creek-Nethunter-gki-candidate.zip Creek-Nethunter-adapters-modules.zip
-          mkdir -p artifacts/release artifacts/modules artifacts/adapter-module/system/bin artifacts/adapter-module/system/lib/modules/nethunter
+          mkdir -p artifacts/release artifacts/modules artifacts/adapter-module/modules
           # Release package contains only kernel test inputs and a deliberately
           # minimal external-adapter module set. Do NOT ship the generated
           # vendor_boot.img: this build still uses historical module-list inputs,
@@ -210,24 +210,25 @@ jobs:
           test -s artifacts/modules/MODULE-LIST.txt
           test ! -e artifacts/modules/qca_cld3_wlan.ko
 
-          # Package adapter drivers as a Magisk module, but never load them at boot.
-          # There is no service.sh; loading is explicit via /system/bin/nhd.
-          cp -a artifacts/modules/. artifacts/adapter-module/system/lib/modules/nethunter/
-          cp scripts/nhd artifacts/adapter-module/system/bin/nhd
-          cp scripts/nh-load.sh artifacts/adapter-module/system/bin/nh-load.sh
+          # Package as a KernelSU-compatible module. Keep payload inside the
+          # module directory (no /system overlay, no metamodule requirement).
+          # Deliberately omit service.sh/post-fs-data.sh: nothing loads at boot.
+          cp -a artifacts/modules/. artifacts/adapter-module/modules/
+          cp scripts/nhd artifacts/adapter-module/nhd
+          cp scripts/nh-load.sh artifacts/adapter-module/nh-load.sh
           cat > artifacts/adapter-module/module.prop <<'EOF_MODULE'
           id=creek_nethunter_adapters
           name=Creek NetHunter Adapter Modules (On-Demand)
           version=0.1.0
           versionCode=100
           author=Ferztie666
-          description=External adapter modules loaded only when explicitly requested; no boot-time module loading
+          description=KernelSU adapter module; external drivers load only when explicitly requested, never at boot
           EOF_MODULE
           cat > artifacts/adapter-module/customize.sh <<'EOF_CUSTOMIZE'
           # Permission setup only; deliberately does not load any modules.
-          set_perm "$MODPATH/system/bin/nhd" 0 0 0755
-          set_perm "$MODPATH/system/bin/nh-load.sh" 0 0 0755
-          set_perm_recursive "$MODPATH/system/lib/modules/nethunter" 0 0 0755 0644
+          set_perm "$MODPATH/nhd" 0 0 0755
+          set_perm "$MODPATH/nh-load.sh" 0 0 0755
+          set_perm_recursive "$MODPATH/modules" 0 0 0755 0644
           EOF_CUSTOMIZE
           (cd artifacts/release && sha256sum -- * > SHA256SUMS)
           (cd artifacts/modules && sha256sum -- *.ko > SHA256SUMS)
