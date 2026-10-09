@@ -128,46 +128,25 @@ done
 printf '%s\n' "$KERNEL_RELEASE" > "$OUT/KERNEL-RELEASE"
 chmod 0755 "$OUT/nhd" "$OUT/nh-load.sh"
 cat > "$OUT/ON-DEMAND-LOADING.txt" <<'EOF_ON_DEMAND'
-Creek NetHunter adapter modules: on-demand Magisk module
-========================================================
-Install Creek-Nethunter-adapters-modules.zip in Magisk. This installs only
-helper scripts and a separate /system/lib/modules/nethunter directory.
-There is deliberately NO service.sh or boot-time insmod/modprobe action.
-The internal Qualcomm wlan0 driver is not included in this adapter package.
+Creek NetHunter adapter modules: KernelSU-compatible on-demand payload
+=======================================================================
+The CI packages these files into a KernelSU module ZIP. Install it through
+the KernelSU Manager app (not custom recovery). No service.sh or
+post-fs-data.sh is included, so this module does not load drivers at boot.
+The helper and module payload stay inside the module directory; no /system
+overlay or metamodule is needed.
 
-Check state:
-  su -c '/system/bin/nhd status'
+After installation, check state:
+  su -c '/data/adb/modules/creek_nethunter_adapters/nhd status'
 Load a specific adapter driver only when needed:
-  su -c '/system/bin/nhd load rtw_8812au'
-Load a supported driver family on demand:
-  su -c '/system/bin/nhd load-family rtw88'
-  su -c '/system/bin/nhd load-family rtl8xxxu'
-  su -c '/system/bin/nhd load-family mt76'
-To trigger loading as part of a tool invocation, run from an environment where
-the NetHunter command is on PATH:
-  su -c '/system/bin/nhd run-family rtw88 -- airmon-ng start wlan1'
-The helper checks kernel release, loads packaged dependencies first, and
-refuses mismatched releases. Monitor mode is not forced by module loading:
-start it only through the requested NetHunter/iw workflow after the adapter
-appears. Compatibility with each physical adapter still needs device testing.
-EOF_ON_DEMANDNetHunter adapter modules: on-demand loading only
-=================================================
-No module in this package is configured for automatic loading at boot.
-Place this directory somewhere accessible to a root shell on the phone, then
-run: su -c '/path/to/nhd status'
-Load a driver only when the matching USB adapter is connected and needed:
-  su -c '/path/to/nhd load rtw_8812au'
-  su -c '/path/to/nhd load-family rtw88'
-  su -c '/path/to/nhd load-family rtl8xxxu'
-  su -c '/path/to/nhd load-family mt76'
-For one command-triggered session, use:
-  su -c '/path/to/nhd run-family rtw88 -- airmon-ng start wlan1'
-The helper loads packaged module dependencies first. It does not unload,
-replace, or force monitor mode on the internal Qualcomm wlan0 device.
-To use monitor mode, invoke the appropriate NetHunter/iw workflow explicitly
-after confirming that the adapter/driver supports it. This package does not
-promise that every adapter is supported or that Android will auto-load a
-module merely because an application starts.
+  su -c '/data/adb/modules/creek_nethunter_adapters/nhd load rtw_8812au'
+Load a supported family on demand:
+  su -c '/data/adb/modules/creek_nethunter_adapters/nhd load-family rtw88'
+  su -c '/data/adb/modules/creek_nethunter_adapters/nhd load-family rtl8xxxu'
+  su -c '/data/adb/modules/creek_nethunter_adapters/nhd load-family mt76'
+The helper checks the running kernel release and loads packaged dependencies
+first. It does not load or unload internal Qualcomm wlan0 or force monitor
+mode. Compatibility with each physical adapter still needs device testing.
 EOF_ON_DEMAND
 
 # Never allow the internal Qualcomm WLAN driver into the USB adapter package.
