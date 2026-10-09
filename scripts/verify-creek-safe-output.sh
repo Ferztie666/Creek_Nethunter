@@ -5,6 +5,7 @@ OUT="${2:?out}"
 DIST="${3:?dist}"
 LOGDIR="${4:?logdir}"
 mkdir -p "$LOGDIR"
+: > "$LOGDIR/final-gate.txt"
 
 die(){ echo "ERROR: $*" | tee -a "$LOGDIR/final-gate.txt" >&2; exit 1; }
 
@@ -92,7 +93,7 @@ if [ -e "$DIST/vmlinux" ]; then
   echo "[info] vmlinux present in build dist as an intermediate artifact; packaging will exclude it" |
     tee -a "$LOGDIR/final-gate.txt"
 fi
-echo "FINAL_GATE=PASS_WITH_ABI_BYPASS" | tee "$LOGDIR/final-gate.txt"
+echo "FINAL_GATE=PASS_WITH_ABI_BYPASS" | tee -a "$LOGDIR/final-gate.txt"
 echo "IMAGE=$IMG" | tee -a "$LOGDIR/final-gate.txt"
 echo "WLAN=$WLAN" | tee -a "$LOGDIR/final-gate.txt"
 echo "SYMVERS=$SYMVERS" | tee -a "$LOGDIR/final-gate.txt"
