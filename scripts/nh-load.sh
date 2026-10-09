@@ -6,8 +6,8 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
 # stock module path or module-load list is overwritten.
 if [ -r "$SCRIPT_DIR/MODULE-LIST.txt" ]; then
   BASE="$SCRIPT_DIR"
-elif [ -r /system/lib/modules/nethunter/MODULE-LIST.txt ]; then
-  BASE=/system/lib/modules/nethunter
+elif [ -r "$SCRIPT_DIR/modules/MODULE-LIST.txt" ]; then
+  BASE="$SCRIPT_DIR/modules"
 else
   echo "ERROR: adapter module payload not found" >&2
   exit 1
