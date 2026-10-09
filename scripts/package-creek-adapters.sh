@@ -138,6 +138,8 @@ Load a driver only when the matching USB adapter is connected and needed:
   su -c '/path/to/nhd load-family rtw88'
   su -c '/path/to/nhd load-family rtl8xxxu'
   su -c '/path/to/nhd load-family mt76'
+For one command-triggered session, use:
+  su -c '/path/to/nhd run-family rtw88 -- airmon-ng start wlan1'
 The helper loads packaged module dependencies first. It does not unload,
 replace, or force monitor mode on the internal Qualcomm wlan0 device.
 To use monitor mode, invoke the appropriate NetHunter/iw workflow explicitly
