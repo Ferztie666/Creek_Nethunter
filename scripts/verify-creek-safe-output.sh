@@ -45,20 +45,16 @@ for tree in "$KP/common" "$KP/msm-kernel" "$KP/vendor/qcom/opensource/wlan"; do
   fi
 done
 
-# The ABI checker is a real build input, so check its active file explicitly.
+# The ABI checker is a real build input. A bypass invalidates the safety gate.
 ABI=""
 for f in "$KP/build/abi/compare_to_symbol_list" "$KP/build/kernel/abi/compare_to_symbol_list"; do
   if [ -f "$f" ]; then ABI="$(readlink -f "$f")"; break; fi
 done
 [ -n "$ABI" ] || die "ABI checker not found"
-if grep -qs 'BUT WHO CARES?' "$ABI"; then
-  echo "[warn] upstream ABI compatibility bypass is active; ABI/KMI compatibility is NOT verified" |
-    tee -a "$LOGDIR/final-gate.txt"
-  echo "ABI_BYPASS=ACTIVE_UPSTREAM_COMPATIBILITY_WORKAROUND" |
-    tee -a "$LOGDIR/final-gate.txt"
-else
-  echo "ABI_BYPASS=NOT_DETECTED" | tee -a "$LOGDIR/final-gate.txt"
+if grep -qE 'BUT WHO CARES\?|ABI_BYPASS|abi-bypass' "$ABI"; then
+  die "ABI checker bypass detected; refusing to mark output verified"
 fi
+echo "ABI_BYPASS=NOT_DETECTED" | tee -a "$LOGDIR/final-gate.txt"
 
 # Module ABI metadata must be present and tied to the build.
 SYMVERS=""
@@ -93,7 +89,7 @@ if [ -e "$DIST/vmlinux" ]; then
   echo "[info] vmlinux present in build dist as an intermediate artifact; packaging will exclude it" |
     tee -a "$LOGDIR/final-gate.txt"
 fi
-echo "FINAL_GATE=PASS_WITH_ABI_BYPASS" | tee -a "$LOGDIR/final-gate.txt"
+echo "FINAL_GATE=PASS_ABI_CHECKER_PRESERVED" | tee -a "$LOGDIR/final-gate.txt"
 echo "IMAGE=$IMG" | tee -a "$LOGDIR/final-gate.txt"
 echo "WLAN=$WLAN" | tee -a "$LOGDIR/final-gate.txt"
 echo "SYMVERS=$SYMVERS" | tee -a "$LOGDIR/final-gate.txt"
