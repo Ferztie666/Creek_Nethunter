@@ -1,5 +1,7 @@
 # Creek NetHunter adapter/module targets requested by the project owner.
-# One canonical Linux module name per line. This is a target inventory, not a
+# One canonical Linux module name per line. Current inventory: 139 unique names
+# (including qca_cld3_wlan, which is audit-only and not in the adapter ZIP).
+# This is a target inventory, not a
 # claim that every driver exists in this kernel source or is built.
 # QCACLD is intentionally audit-only: never ship it in the USB adapter package
 # because it is the phone's internal wlan0 driver and is not device-ABI verified.
