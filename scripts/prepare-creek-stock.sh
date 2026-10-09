@@ -78,12 +78,10 @@ if [ ! -f "$REAL_BUILD_SH" ]; then
   exit 1
 fi
 
-# Creek's custom GKI adds symbols from NetHunter subsystems (TCP congestion
-# control and other common-kernel features). Wireless cores and MT76 stay in
-# the MSM module build. Use nullptr-t-oss' ABI bypass v2 so the
-# stock symbol-list gate reports differences but does not abort this custom
-# kernel build.
-ABI_BYPASS_PATCH="$REPO_ROOT/patches/common/abi-bypass-v2.patch"
+# NetHunter adds kernel features that can change the exported symbol set.
+# Keep the upstream ABI/KMI checker intact: never patch its failure path to
+# force a successful build. If the selected source has a known bypass marker,
+# fail closed so the workflow can stop before compilation.
 ABI_CHECKER="$ROOT/build/abi/compare_to_symbol_list"
 if [ ! -f "$ABI_CHECKER" ]; then
   ABI_CHECKER="$ROOT/build/kernel/abi/compare_to_symbol_list"
@@ -93,28 +91,12 @@ if [ ! -f "$ABI_CHECKER" ]; then
   exit 1
 fi
 ABI_CHECKER_REAL="$(readlink -f "$ABI_CHECKER")"
-echo "[nethunter] ABI checker: $ABI_CHECKER -> $ABI_CHECKER_REAL"
+echo "[nethunter] authoritative ABI checker: $ABI_CHECKER_REAL"
 if grep -q 'BUT WHO CARES?' "$ABI_CHECKER_REAL"; then
-  echo "[nethunter] ABI bypass already applied"
-elif grep -qE '^\s*exit 1$' "$ABI_CHECKER_REAL"; then
-  # The repo manifest exposes this project through symlinks, so git -C on the
-  # kernel_platform superdirectory is unreliable. Apply the same nullptr v2
-  # change to the exact resolved checker used by build.sh, then verify it.
-  ABI_CHECKER_TMP="${ABI_CHECKER_REAL}.tmp"
-  awk '{ if ($0 ~ /^[[:space:]]*exit 1$/) { print "\techo \"BUT WHO CARES?\" >&2"; print "\texit 0" } else print }' \
-    "$ABI_CHECKER_REAL" > "$ABI_CHECKER_TMP"
-  mv "$ABI_CHECKER_TMP" "$ABI_CHECKER_REAL"
-  chmod +x "$ABI_CHECKER_REAL"
-  echo "[nethunter] ABI bypass applied: $ABI_CHECKER_REAL"
-else
-  echo "ERROR: ABI checker has unexpected contents: $ABI_CHECKER_REAL" >&2
-  tail -20 "$ABI_CHECKER_REAL" >&2
+  echo "ERROR: ABI checker contains a bypass marker; refusing to build" >&2
   exit 1
 fi
-if ! grep -q 'BUT WHO CARES?' "$ABI_CHECKER_REAL"; then
-  echo "ERROR: ABI bypass verification failed" >&2
-  exit 1
-fi
+
 # build.sh overwrites MAKEFLAGS with nproc, which can terminate the runner
 # during the GKI LTO link. Respect the workflow's explicit jobs input for both
 # the outer vendor build and the recursive inner GKI build.
