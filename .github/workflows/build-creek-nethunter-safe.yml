@@ -212,11 +212,31 @@ jobs:
 
           printf '%s\n'             'Creek NetHunter GKI verified build'             'Kernel family: 5.15.167-android13-8'             'ABI bypass: disabled'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
 
+          # Keep the patched internal Qualcomm WLAN driver separate from USB adapters.
+          # This is an audit/test payload only: do not install or flash it until the
+          # device's stock WLAN module ABI, vermagic, symbol dependencies and load path
+          # have been verified on the exact Android 16 build.
+          mkdir -p artifacts/internal-wlan
+          QCA_MODULE="$(find "$OUT_DIR/staging/lib/modules" -type f -name qca_cld3_wlan.ko -print -quit)"
+          test -n "$QCA_MODULE" && test -s "$QCA_MODULE"
+          cp "$QCA_MODULE" artifacts/internal-wlan/qca_cld3_wlan.ko
+          {
+            echo "Creek internal Qualcomm WLAN module - AUDIT/TEST ONLY"
+            echo "Module: qca_cld3_wlan.ko"
+            echo "Purpose: patched QCACLD driver for internal WLAN (wlan0), not USB adapters"
+            echo "Status: NOT FLASH-READY; device-side ABI/KMI, vermagic, symbols, dependencies and module load path are unverified"
+            echo "Do not replace or unload the stock Qualcomm WLAN driver on a daily-use device."
+            echo "Do not force con_mode or unload WLAN at boot."
+          } > artifacts/internal-wlan/INSTALL-GATE.txt
+          (cd artifacts/internal-wlan && sha256sum -- qca_cld3_wlan.ko > SHA256SUMS)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-verified.zip release)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-adapters-modules.zip modules)
+          (cd artifacts && zip -r9 -q ../Creek-Nethunter-internal-wlan-audit.zip internal-wlan)
           unzip -tq Creek-Nethunter-gki-verified.zip
           unzip -tq Creek-Nethunter-adapters-modules.zip
+          unzip -tq Creek-Nethunter-internal-wlan-audit.zip
           ls -lh Creek-Nethunter-*.zip
+          echo "INTERNAL_WLAN_AUDIT_PACKAGE=PASS"
           echo "PACKAGE_RELEASE=PASS"
 
       - name: Upload verified artifacts
@@ -228,4 +248,5 @@ jobs:
             artifacts/logs/
             Creek-Nethunter-gki-verified.zip
             Creek-Nethunter-adapters-modules.zip
+            Creek-Nethunter-internal-wlan-audit.zip
           if-no-files-found: warn
