@@ -64,7 +64,7 @@ rmnet_wlan.ko
 
 ## NetHunter adapter module inventory and packaging status
 
-The workflow retains the complete requested target inventory in
+The workflow retains the complete requested target inventory of 139 distinct names in
 `config/creek-adapter-module-targets.txt`. The list is a **request/inventory**,
 not a promise that all targets exist in the pinned Linux 5.15.167 sources.
 The adapter package is generated only from actual staged `.ko` files; it never
@@ -72,7 +72,7 @@ creates placeholder modules. Inspect `MODULE-STATUS.txt`,
 `MODULE-MANIFEST.txt`, and `adapter-module-status.txt` in the Actions artifact
 for every requested target and its build/package status. At the current baseline,
 only the modules actually staged by the kernel build are shipped; the historical
-51-driver/2-dependency package did **not** contain all 131 requested targets.
+51-driver/2-dependency package did **not** contain all 139 requested targets.
 
 `qca_cld3_wlan.ko` is deliberately kept out of the USB-adapter package and
 provided separately as an audit-only payload until exact Android 16 ABI/KMI,
