@@ -32,7 +32,7 @@ aliases = {
  "w1_ds2408":"W1_SLAVE_DS2408", "can_isotp":"CAN_ISOTP",
  "can_j1939":"CAN_J1939", "slcan":"CAN_SLCAN", "can_gw":"CAN_GW",
  "vcan":"CAN_VCAN", "usb_f_hid":"USB_CONFIGFS_F_HID",
- "usb_f_mass_storage":"USB_CONFIGFS_F_MASS_STORAGE",
+ "usb_f_mass_storage":"USB_CONFIGFS_MASS_STORAGE",
  "usb_f_serial":"USB_CONFIGFS_F_SERIAL", "usb_f_ecm":"USB_CONFIGFS_ECM",
  "g_multi":"USB_G_MULTI", "uinput":"INPUT_UINPUT", "evdev":"INPUT_EVDEV",
  "dummy":"DUMMY", "ifb":"IFB", "macvlan":"MACVLAN", "ipvlan":"IPVLAN",
