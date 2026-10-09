@@ -61,3 +61,34 @@ rmnet_core.ko
 rmnet_ctl.ko
 rmnet_wlan.ko
 ```
+
+## NetHunter adapter module inventory and packaging status
+
+The workflow retains the complete requested target inventory in
+`config/creek-adapter-module-targets.txt`. The list is a **request/inventory**,
+not a promise that all targets exist in the pinned Linux 5.15.167 sources.
+The adapter package is generated only from actual staged `.ko` files; it never
+creates placeholder modules. Inspect `MODULE-STATUS.txt`,
+`MODULE-MANIFEST.txt`, and `adapter-module-status.txt` in the Actions artifact
+for every requested target and its build/package status. At the current baseline,
+only the modules actually staged by the kernel build are shipped; the historical
+51-driver/2-dependency package did **not** contain all 131 requested targets.
+
+`qca_cld3_wlan.ko` is deliberately kept out of the USB-adapter package and
+provided separately as an audit-only payload until exact Android 16 ABI/KMI,
+vermagic, symbol dependencies, and recovery behavior are checked on-device.
+No module package should load wireless, SDR, CAN, USB-gadget, serial, or other
+optional drivers at boot. They must remain unloaded until explicitly requested.
+This avoids unsolicited module activation, but does not itself prove that every
+driver is safe or compatible when loaded; physical adapter testing is still
+required.
+
+## Kernel ZIP status
+
+The current workflow output named `Creek-Nethunter-gki-candidate.zip` is a
+**candidate image bundle**, not the requested full AnyKernel3 ZIP. It currently
+contains the built kernel image and release gate files, not the complete
+AnyKernel3 layout with `anykernel.sh`, `META-INF`, and the requested tools.
+Do not rename it to `Creek-Nethunter-gki-AK3.zip` or flash it as an installer.
+The AK3 packaging step must be implemented and audited separately before it can
+be considered ready for installation.
