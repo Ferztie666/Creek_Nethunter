@@ -20,7 +20,8 @@ common, msm, nhcfg, msmcfg, report = map(Path, sys.argv[1:])
 aliases = {
  "mac80211":"MAC80211", "rtw_core":"RTW88_CORE", "rtw_usb":"RTW88_USB",
  "rtw_sdio":"RTW88_SDIO", "rtw_pci":"RTW88_PCI",
- "hackrf":"USB_HACKRF", "airspy":"USB_AIRSPY",
+ "hackrf":"USB_HACKRF", "airspy":"USB_AIRSPY", "rtl2832":"DVB_RTL2832",
+ "rtl2830":"DVB_RTL2830", "mn88473":"DVB_MN88473",
  "rtl2832_sdr":"DVB_RTL2832_SDR", "dvb_usb_rtl28xxu":"DVB_USB_RTL28XXU",
  "cp210x":"USB_SERIAL_CP210X", "usb_wwan":"USB_WWAN",
  "nfc":"NFC", "nfc_nci":"NFC_NCI", "nfc_llcp":"NFC_LLCP",
