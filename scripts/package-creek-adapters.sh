@@ -87,6 +87,42 @@ for n in "${!WANT[@]}"; do
   esac
 done
 
+# Emit a dependency map for on-demand loading. The Android-side helper
+# loads dependencies recursively only when a user/tool explicitly requests a
+# driver; it is never installed as a boot-time service.
+: > "$OUT/MODULE-DEPENDS.txt"
+for n in "${!WANT[@]}"; do
+  f="${BY_NAME[$n]:-}"
+  [ -n "$f" ] || continue
+  deps=""
+  if command -v modinfo >/dev/null 2>&1; then
+    deps="$(modinfo -F depends "$f" 2>/dev/null | tr ',' ' ' || true)"
+  fi
+  printf '%s: %s\n' "$n" "$deps" >> "$OUT/MODULE-DEPENDS.txt"
+done
+sort -o "$OUT/MODULE-DEPENDS.txt" "$OUT/MODULE-DEPENDS.txt"
+cp "$PWD/scripts/nhd" "$OUT/nhd"
+cp "$PWD/scripts/nh-load.sh" "$OUT/nh-load.sh"
+chmod 0755 "$OUT/nhd" "$OUT/nh-load.sh"
+cat > "$OUT/ON-DEMAND-LOADING.txt" <<'EOF_ON_DEMAND'
+NetHunter adapter modules: on-demand loading only
+=================================================
+No module in this package is configured for automatic loading at boot.
+Place this directory somewhere accessible to a root shell on the phone, then
+run: su -c '/path/to/nhd status'
+Load a driver only when the matching USB adapter is connected and needed:
+  su -c '/path/to/nhd load rtw_8812au'
+  su -c '/path/to/nhd load-family rtw88'
+  su -c '/path/to/nhd load-family rtl8xxxu'
+  su -c '/path/to/nhd load-family mt76'
+The helper loads packaged module dependencies first. It does not unload,
+replace, or force monitor mode on the internal Qualcomm wlan0 device.
+To use monitor mode, invoke the appropriate NetHunter/iw workflow explicitly
+after confirming that the adapter/driver supports it. This package does not
+promise that every adapter is supported or that Android will auto-load a
+module merely because an application starts.
+EOF_ON_DEMAND
+
 # Never allow the internal Qualcomm WLAN driver into the USB adapter package.
 if [ -e "$OUT/qca_cld3_wlan.ko" ]; then
   echo "ERROR: qca_cld3_wlan.ko leaked into adapter package" >&2
