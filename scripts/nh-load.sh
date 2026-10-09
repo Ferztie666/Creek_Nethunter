@@ -61,5 +61,17 @@ case "${1:-}" in
  status) status;;
  load) [ "$#" -eq 2 ] || { echo "Usage: nhd load MODULE_NAME" >&2; exit 2; }; load_one "$2";;
  load-family) [ "$#" -eq 2 ] || { echo "Usage: nhd load-family rtw88|rtl8xxxu|mt76" >&2; exit 2; }; case "$2" in rtw88|rtl8xxxu|mt76) family "$2";; *) echo "ERROR: unsupported family: $2" >&2; exit 2;; esac;;
- *) echo "Usage: nhd status | load MODULE_NAME | load-family rtw88|rtl8xxxu|mt76" >&2; exit 2;;
+ run)
+   [ "$#" -ge 4 ] && [ "$3" = "--" ] || { echo "Usage: nhd run MODULE_NAME -- COMMAND [ARGS...]" >&2; exit 2; }
+   load_one "$2"
+   shift 3
+   exec "$@"
+   ;;
+ run-family)
+   [ "$#" -ge 4 ] && [ "$3" = "--" ] || { echo "Usage: nhd run-family rtw88|rtl8xxxu|mt76 -- COMMAND [ARGS...]" >&2; exit 2; }
+   case "$2" in rtw88|rtl8xxxu|mt76) family "$2";; *) echo "ERROR: unsupported family: $2" >&2; exit 2;; esac
+   shift 3
+   exec "$@"
+   ;;
+ *) echo "Usage: nhd status | load MODULE_NAME | load-family FAMILY | run MODULE -- COMMAND | run-family FAMILY -- COMMAND" >&2; exit 2;;
 esac
