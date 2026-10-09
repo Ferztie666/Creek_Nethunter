@@ -73,7 +73,7 @@ status(){
 family(){
  fam="$1"; count=0
  while IFS= read -r line; do case "$line" in ""|\#*) continue;; esac
-   n="${line%.ko}"
+   n="$(norm "${line%.ko}")"
    case "$fam:$n" in
      rtw88:rtw_core|rtw88:rtw_usb|rtw88:rtw_*u|rtl8xxxu:rtl8xxxu|mt76:mt76|mt76:mt76_usb|mt76:mt76_connac_lib|mt76:mt76x0u|mt76:mt76x2u|mt76:mt7601u|mt76:mt7663u|mt76:mt7663_usb)
        SEEN=" "; load_one "$n"; count=$((count+1));;
