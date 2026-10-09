@@ -3,6 +3,7 @@ set -euo pipefail
 
 STAGING="${1:?usage: package-creek-adapters.sh <staging> <output-dir>}"
 OUT="${2:?usage: package-creek-adapters.sh <staging> <output-dir>}"
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 MODROOT=""
 for d in "$STAGING"/lib/modules/*; do
@@ -101,8 +102,9 @@ for n in "${!WANT[@]}"; do
   printf '%s: %s\n' "$n" "$deps" >> "$OUT/MODULE-DEPENDS.txt"
 done
 sort -o "$OUT/MODULE-DEPENDS.txt" "$OUT/MODULE-DEPENDS.txt"
-cp "$PWD/scripts/nhd" "$OUT/nhd"
-cp "$PWD/scripts/nh-load.sh" "$OUT/nh-load.sh"
+cp "$SCRIPT_ROOT/scripts/nhd" "$OUT/nhd"
+cp "$SCRIPT_ROOT/scripts/nh-load.sh" "$OUT/nh-load.sh"
+printf '%s\n' "${MODROOT##*/}" > "$OUT/KERNEL-RELEASE"
 chmod 0755 "$OUT/nhd" "$OUT/nh-load.sh"
 cat > "$OUT/ON-DEMAND-LOADING.txt" <<'EOF_ON_DEMAND'
 NetHunter adapter modules: on-demand loading only
