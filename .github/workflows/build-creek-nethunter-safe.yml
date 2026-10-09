@@ -149,6 +149,8 @@ jobs:
             exit "$rc"
           fi
           ! grep -qs 'CONFIG_BBG' "$KP/common/arch/arm64/configs/nethunter.config"
+          bash scripts/enable-creek-adapter-configs.sh "$KP" "$GITHUB_WORKSPACE/artifacts/logs/adapter-config-status.txt"
+          bash -n scripts/enable-creek-adapter-configs.sh
 
       - name: NetHunter post-config audit
         shell: bash
@@ -258,6 +260,9 @@ jobs:
           unzip -tq Creek-Nethunter-gki-candidate.zip
           unzip -tq Creek-Nethunter-adapters-modules.zip
           unzip -tq Creek-Nethunter-internal-wlan-audit.zip
+          unzip -Z1 Creek-Nethunter-adapters-modules.zip | sort > artifacts/logs/adapter-zip-file-list.txt
+          cp artifacts/modules/MODULE-STATUS.txt artifacts/logs/adapter-module-status.txt
+          cp artifacts/modules/MODULE-MANIFEST.txt artifacts/logs/adapter-module-manifest.txt
           ls -lh Creek-Nethunter-*.zip
           echo "INTERNAL_WLAN_AUDIT_PACKAGE=PASS"
           echo "PACKAGE_RELEASE=PASS"
