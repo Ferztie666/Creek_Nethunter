@@ -18,6 +18,7 @@ declare -A BY_NAME
 while IFS= read -r -d '' f; do
   n="${f##*/}"
   n="${n%.ko}"
+  n="$(printf '%s' "$n" | tr '-' '_')"
   BY_NAME["$n"]="$f"
 done < <(find "$MODROOT" -type f -name '*.ko' -print0)
 
@@ -26,31 +27,31 @@ echo "TOTAL_STAGED_MODULES=${#BY_NAME[@]}"
 
 declare -A WANT
 declare -a QUEUE=()
+TARGETS="$SCRIPT_ROOT/config/creek-adapter-module-targets.txt"
+[ -r "$TARGETS" ] || { echo "ERROR: module target inventory missing: $TARGETS" >&2; exit 1; }
+STATUS="$OUT/MODULE-STATUS.txt"
+: > "$STATUS"
 
-add_driver_tree() {
-  local root="$1"
-  [ -d "$root" ] || return 0
-  while IFS= read -r -d '' f; do
-    local n="${f##*/}"
-    n="${n%.ko}"
-    WANT["$n"]="driver"
-    QUEUE+=("$n")
-  done < <(find "$root" -type f -name '*.ko' -print0)
-}
-
-# External USB-adapter drivers built by this Creek NetHunter tree.
-# Internal Qualcomm QCACLD (wlan0) is deliberately excluded.
-add_driver_tree "$MODROOT/extra/nethunter/rtw88"
-add_driver_tree "$MODROOT/extra/nethunter/rtl8xxxu"
-
-# Include only MediaTek wireless driver families (mt76/mt7601u/etc.), not
-# arbitrary Qualcomm/vendor modules.
-add_driver_tree "$MODROOT/kernel/drivers/net/wireless/mediatek"
+while IFS= read -r line; do
+  line="${line%%#*}"
+  line="$(printf '%s' "$line" | tr -d '[:space:]' | tr '-' '_')"
+  [ -n "$line" ] || continue
+  if [ "$line" = qca_cld3_wlan ]; then
+    printf '%s\t%s\t%s\n' "$line.ko" "SKIPPED_RISK" "Internal Qualcomm wlan0 driver; ABI/KMI and runtime recovery are not device-verified" >> "$STATUS"
+    continue
+  fi
+  if [ -n "${BY_NAME[$line]:-}" ]; then
+    WANT["$line"]="driver"
+    QUEUE+=("$line")
+    printf '%s\t%s\t%s\n' "$line.ko" "STAGED_TARGET" "Will package and verify vermagic/dependencies" >> "$STATUS"
+  else
+    printf '%s\t%s\t%s\n' "$line.ko" "NOT_BUILT_OR_NOT_IN_SOURCE" "Not present in kernel staging; not fabricated" >> "$STATUS"
+  fi
+done < "$TARGETS"
 
 [ "${#QUEUE[@]}" -gt 0 ] || {
-  echo "ERROR: no NetHunter external adapter modules were built" >&2
-  echo "Available external module directories:" >&2
-  find "$MODROOT" -maxdepth 4 -type d \( -path '*/extra/nethunter/*' -o -path '*/kernel/drivers/net/wireless/*' \) -print 2>/dev/null | sort >&2 || true
+  echo "ERROR: none of the requested adapter targets were built" >&2
+  cat "$STATUS" >&2
   exit 1
 }
 
@@ -65,9 +66,11 @@ if command -v modinfo >/dev/null 2>&1; then
     IFS=',' read -ra dep_arr <<< "$deps"
     for dep in "${dep_arr[@]}"; do
       [ -n "$dep" ] || continue
+      dep="$(printf '%s' "$dep" | tr '-' '_')"
       if [ -n "${BY_NAME[$dep]:-}" ] && [ -z "${WANT[$dep]:-}" ]; then
         WANT["$dep"]="dependency"
         QUEUE+=("$dep")
+        printf '%s\t%s\t%s\n' "$dep.ko" "DEPENDENCY" "Required by modinfo dependency closure" >> "$STATUS"
       fi
     done
   done
@@ -80,7 +83,7 @@ dependency_count=0
 for n in "${!WANT[@]}"; do
   f="${BY_NAME[$n]:-}"
   [ -n "$f" ] || { echo "ERROR: missing selected module: $n" >&2; exit 1; }
-  cp -f "$f" "$OUT/$n.ko"
+  cp -f "$f" "$OUT/${f##*/}"
   case "${WANT[$n]}" in
     driver) driver_count=$((driver_count+1));;
     dependency) dependency_count=$((dependency_count+1));;
@@ -168,6 +171,8 @@ fi
   echo "Kernel module tree: ${MODROOT##*/}"
   echo "Driver modules: $driver_count"
   echo "Dependency modules: $dependency_count"
+  echo "Requested targets: $(grep -Ev '^[[:space:]]*(#|$)' "$TARGETS" | wc -l)"
+  echo "Status report: MODULE-STATUS.txt"
   echo
   echo "[driver]"
   for n in "${!WANT[@]}"; do
@@ -185,4 +190,5 @@ fi
 } > "$OUT/MODULE-MANIFEST.txt"
 
 find "$OUT" -maxdepth 1 -type f -name '*.ko' -printf '%f\n' | sort > "$OUT/MODULE-LIST.txt"
+sort -u "$STATUS" -o "$STATUS"
 printf 'ADAPTER_PACKAGE=PASS\nDRIVER_MODULES=%s\nDEPENDENCY_MODULES=%s\n' "$driver_count" "$dependency_count"
