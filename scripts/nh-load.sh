@@ -28,7 +28,7 @@ INS="$(command -v insmod 2>/dev/null || true)"
 [ -n "$INS" ] || { [ ! -x /system/bin/insmod ] || INS=/system/bin/insmod; }
 [ -n "$INS" ] || { echo "ERROR: insmod not found" >&2; exit 1; }
 norm(){ printf '%s' "$1" | tr '-' '_'; }
-loaded(){ n="$(norm "$1")"; [ -d "/sys/module/$n" ] && return 0; awk -v n="$n" 'NR>1{m=$1;gsub(/-/,"_",m);if(m==n)f=1}END{exit !f}' /proc/modules 2>/dev/null; }
+loaded(){ n="$(norm "$1")"; [ -d "/sys/module/$n" ] && return 0; awk -v n="$n" '{m=$1;gsub(/-/,"_",m);if(m==n)f=1}END{exit !f}' /proc/modules 2>/dev/null; }
 present(){ n="$(norm "$1")"; awk -v n="$n" '$0==n".ko"{f=1}END{exit !f}' "$MODLIST"; }
 deps(){ n="$(norm "$1")"; [ ! -r "$DEPMAP" ] || awk -F: -v n="$n" '$1==n{print $2;f=1}END{if(!f)exit 0}' "$DEPMAP"; }
 SEEN=" "
@@ -62,7 +62,7 @@ family(){
  while IFS= read -r line; do case "$line" in ""|\#*) continue;; esac
    n="${line%.ko}"
    case "$fam:$n" in
-     rtw88:rtw_*|rtl8xxxu:rtl8xxxu|mt76:mt76*|mt76:mt7601u|mt76:mt7603e|mt76:mt7615e|mt76:mt7915e|mt76:mt7921e)
+     rtw88:rtw_core|rtw88:rtw_usb|rtw88:rtw_*u|rtl8xxxu:rtl8xxxu|mt76:mt76|mt76:mt76_usb|mt76:mt76_connac_lib|mt76:mt76x0u|mt76:mt76x2u|mt76:mt7601u|mt76:mt7663u|mt76:mt7663_usb)
        SEEN=" "; load_one "$n"; count=$((count+1));;
    esac
  done < "$MODLIST"
