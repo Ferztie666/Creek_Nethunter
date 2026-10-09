@@ -1,6 +1,17 @@
 #!/system/bin/sh
 set -eu
-BASE="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
+# In a flat unpacked test directory, use colocated modules. In the installable
+# Magisk package, keep modules in a dedicated non-boot-loaded directory so no
+# stock module path or module-load list is overwritten.
+if [ -r "$SCRIPT_DIR/MODULE-LIST.txt" ]; then
+  BASE="$SCRIPT_DIR"
+elif [ -r /system/lib/modules/nethunter/MODULE-LIST.txt ]; then
+  BASE=/system/lib/modules/nethunter
+else
+  echo "ERROR: adapter module payload not found" >&2
+  exit 1
+fi
 DEPMAP="$BASE/MODULE-DEPENDS.txt"
 MODLIST="$BASE/MODULE-LIST.txt"
 [ -r "$MODLIST" ] || { echo "ERROR: MODULE-LIST.txt missing" >&2; exit 1; }
