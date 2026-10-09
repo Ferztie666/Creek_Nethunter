@@ -95,7 +95,6 @@ jobs:
         run: |
           set -euo pipefail
           # Keep existing stock preparation, but never allow it to leave an ABI bypass behind.
-          cp scripts/prepare-creek-stock.sh "$RUNNER_TEMP/prepare-creek-stock.sh"
           ABI_BEFORE=""
           for f in "$KP/build/abi/compare_to_symbol_list" "$KP/build/kernel/abi/compare_to_symbol_list"; do
             if [ -f "$f" ]; then ABI_BEFORE="$(readlink -f "$f")"; break; fi
