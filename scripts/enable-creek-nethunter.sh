@@ -285,7 +285,14 @@ merge_nethunter_config() {
   test -s "${config_file}" || { echo "ERROR: GKI .config missing before NetHunter merge" >&2; return 1; }
   test -s "${fragment}" || { echo "ERROR: NetHunter fragment missing: ${fragment}" >&2; return 1; }
   (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
-  make "${TOOL_ARGS[@]}" O="${OUT_DIR}" "${MAKE_ARGS[@]}" olddefconfig
+  # build.sh exports TOOL_ARGS and MAKE_ARGS as whitespace-delimited strings
+  # in this branch, not Bash arrays. Parse them into arrays and run Kbuild
+  # from KERNEL_DIR; otherwise the combined TOOL_ARGS string is passed as one
+  # invalid make argument and the current directory may be the output tree.
+  local -a nh_tool_args=() nh_make_args=()
+  read -r -a nh_tool_args <<< "${TOOL_ARGS:-}"
+  read -r -a nh_make_args <<< "${MAKE_ARGS:-}"
+  (cd "${KERNEL_DIR}" && make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" olddefconfig)
 }
 POST_DEFCONFIG_CMDS="check_defconfig; merge_nethunter_config"
 EOF_GKI_NETHUNTER
