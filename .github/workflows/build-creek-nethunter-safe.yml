@@ -231,6 +231,10 @@ jobs:
           cp scripts/nhd artifacts/adapter-module/nhd
           cp scripts/nh-load.sh artifacts/adapter-module/nh-load.sh
           cp scripts/nh-action.sh artifacts/adapter-module/action.sh
+          cp artifacts/modules/ON-DEMAND-LOADING.txt artifacts/adapter-module/README-ON-DEMAND.txt
+          cp artifacts/modules/MODULE-STATUS.txt artifacts/adapter-module/MODULE-STATUS.txt
+          cp artifacts/modules/MODULE-MANIFEST.txt artifacts/adapter-module/MODULE-MANIFEST.txt
+          cp artifacts/modules/MODULE-LIST.txt artifacts/adapter-module/MODULE-LIST.txt
           cat > artifacts/adapter-module/module.prop <<'EOF_MODULE'
           id=creek_nethunter_adapters
           name=Creek NetHunter Adapter Modules (On-Demand)
