@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/normalize-creek-defconfig.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/patch-creek-qcacld-monitor.sh; do bash -n "$f"; done
+          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/patch-creek-qcacld-monitor.sh; do bash -n "$f"; done
           for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
           bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
 
@@ -189,7 +189,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
-          bash scripts/normalize-creek-defconfig.sh "$KP"
           cd "$KP"
           if [ "${{ inputs.jobs }}" = "auto" ]; then JOBS=2; else JOBS="${{ inputs.jobs }}"; fi
           export KERNEL_BUILD_JOBS="$JOBS"
