@@ -105,8 +105,8 @@ rmnet_wlan.ko
 
 ## NetHunter adapter module inventory and packaging status
 
-The workflow retains the complete requested target inventory of 139 distinct names in
-`config/creek-adapter-module-targets.txt`. The list is a **request/inventory**,
+The workflow retains the requested target inventory in
+`config/creek-adapter-module-targets.txt` (the file itself is authoritative for the exact count). The list is a **request/inventory**,
 not a promise that all targets exist in the pinned Linux 5.15.167 sources.
 The adapter package is generated only from actual staged `.ko` files; it never
 creates placeholder modules. Inspect `MODULE-STATUS.txt`,
@@ -142,10 +142,4 @@ boot-time service hook is included.
 
 ## Kernel ZIP status
 
-The current workflow output named `Creek-Nethunter-gki-candidate.zip` is a
-**candidate image bundle**, not the requested full AnyKernel3 ZIP. It currently
-contains the built kernel image and release gate files, not the complete
-AnyKernel3 layout with `anykernel.sh`, `META-INF`, and the requested tools.
-Do not rename it to `Creek-Nethunter-gki-AK3.zip` or flash it as an installer.
-The AK3 packaging step must be implemented and audited separately before it can
-be considered ready for installation.
+The current workflow output named `Creek-Nethunter-gki-candidate.zip` is a **candidate image bundle**, not a flashable installer. The original developer's AK3 archive is a separate reference and uses `block=boot`, device `creek`, and Android versions 15–16; those facts do not establish compatibility of a newly built Image.gz with the user's current Android 16 build. A reproducible AK3 packaging step must reuse the known AnyKernel3 layout, replace only `Image.gz`, test ZIP contents, and retain a clear no-flash gate until boot image, AVB, KernelSU mode, ABI/KMI, and device tests pass.
