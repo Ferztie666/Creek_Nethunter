@@ -2,8 +2,8 @@
 set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
 # In a flat unpacked test directory, use colocated modules. In the installable
-# Magisk package, keep modules in a dedicated non-boot-loaded directory so no
-# stock module path or module-load list is overwritten.
+# KernelSU module, keep drivers under modules/ and never overwrite stock module
+# paths or module-load lists.
 if [ -r "$SCRIPT_DIR/MODULE-LIST.txt" ]; then
   BASE="$SCRIPT_DIR"
 elif [ -r "$SCRIPT_DIR/modules/MODULE-LIST.txt" ]; then
