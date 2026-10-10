@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="${1:?kernel_platform path required}"
 MSM="$ROOT/msm-kernel"
-EXPECTED="$MSM/arch/arm64/configs/vendor/creek-gki_defconfig"
+EXPECTED="$MSM/arch/arm64/configs/gki_defconfig"
 
 test -d "$MSM" || { echo "ERROR: MSM source tree missing: $MSM" >&2; exit 1; }
 if ! grep -RqsE '^[[:space:]]*config[[:space:]]+XLOGCHAR([[:space:]]|$)' "$MSM" --include='Kconfig*'; then
@@ -11,7 +11,7 @@ if ! grep -RqsE '^[[:space:]]*config[[:space:]]+XLOGCHAR([[:space:]]|$)' "$MSM" 
   exit 1
 fi
 
-# Prefer the exact Creek defconfig named by the upstream check. If this source
+# Prefer the exact GKI defconfig named by the current Creek build check. If this source
 # snapshot stores it elsewhere, identify the unique defconfig containing the
 # exact redundant lines seen in savedefconfig output. Never edit a guessed
 # gki_defconfig or a file that does not contain those exact markers.
@@ -28,7 +28,7 @@ else
       done | sort -u
   )
   if [ "${#CANDIDATES[@]}" -ne 1 ]; then
-    echo "ERROR: expected defconfig absent and could not identify exactly one file containing the reported redundant XLOGCHAR metadata." >&2
+    echo "ERROR: expected msm-kernel/arch/arm64/configs/gki_defconfig absent and could not identify exactly one file containing the reported redundant XLOGCHAR metadata." >&2
     echo "Expected: $EXPECTED" >&2
     echo "Matching defconfigs: ${#CANDIDATES[@]}" >&2
     printf '  %s\n' "${CANDIDATES[@]:-<none>}" >&2
