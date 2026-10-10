@@ -113,6 +113,8 @@ jobs:
             exit 1
           }
           scripts/prepare-creek-stock.sh "$KP"
+          # Remove only the confirmed stale XLOGCHAR metadata from the exact GKI defconfig checked by this build.
+          bash scripts/normalize-creek-defconfig.sh "$KP"
           # The upstream ABI/KMI checker must remain active. Do not turn its
           # failure into success; a mismatch is a real build gate.
           ! grep -qE 'BUT WHO CARES?|ABI_BYPASS|abi-bypass' "$ABI_BEFORE"
