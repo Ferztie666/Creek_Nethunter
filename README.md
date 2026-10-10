@@ -28,6 +28,38 @@ vendor_boot lists are staged for first-stage loading; remaining built modules
 are placed in vendor_dlkm by the Xiaomi build system. A stock vendor_boot
 image itself is not committed to this repository.
 
+## Missing proprietary stock modules: preservation policy
+
+Do not recreate, stub, rename, or replace a missing closed-source Xiaomi module.
+The only safe default is to preserve the device's already-installed stock
+`vendor_boot`, `vendor_dlkm`, and `system_dlkm` module payloads and their
+original load lists. A future AnyKernel3 installer must patch only the intended
+kernel/boot target and must not flash generated replacement vendor module
+images. Stock module reuse is permitted only after the exact running kernel
+release, vermagic, exported symbols/KMI, dependency closure, and device runtime
+compatibility are verified; never force-load an incompatible module.
+
+Important provenance mismatch found during this audit:
+
+- The repository's captured stock module lists and ramdisk were extracted from
+  Android 15 / kernel `5.15.167-android13-8-gbf0a81a7f319`.
+- The user's current Android 16 stock boot was previously identified as kernel
+  `5.15.194-android13-8-00019-gf4321180a397-ab15212794`.
+- The current manifest still builds the `5.15.167-android13-8` family.
+
+Therefore, those committed Android 15 lists are historical references only;
+they must not be used to reconstruct or overwrite the current Android 16 stock
+module partitions. The new workflow audit emits
+`artifacts/logs/stock-module-coexistence.txt`, asserts that the candidate ZIP
+contains no replacement `.ko` files or vendor/system module images, and
+keeps `FLASH_ALLOWED=NO` while this release/KMI mismatch remains.
+
+**Dynamic stock-module borrowing is not yet implemented in the requested AK3
+installer**—the repo still outputs a candidate bundle, not a flashable AK3 zip.
+The safety policy and artifact audit are in place, but I will not claim the
+installer automatically reuses the phone's current stock modules until that
+runtime behavior is implemented and verified.
+
 ## Modules not available from the current sources
 
 The following stock Xiaomi modules are currently missing from the build because
