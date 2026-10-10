@@ -84,11 +84,18 @@ jobs:
             --repo-rev=stable --depth=1 --no-clone-bundle --no-tags
           repo sync -c --no-clone-bundle --no-tags --optimized-fetch --fail-fast -j2
 
+      - name: Apply audited QCACLD monitor safety fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/patch-creek-qcacld-monitor.sh
+          bash scripts/patch-creek-qcacld-monitor.sh "$KP" "$GITHUB_WORKSPACE"
+
       - name: Source safety audit
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh; do bash -n "$f"; done
+          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/patch-creek-qcacld-monitor.sh; do bash -n "$f"; done
           for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
           bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
 
