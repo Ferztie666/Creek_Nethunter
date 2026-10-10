@@ -197,6 +197,123 @@ jobs:
           export BUILD_CONFIG VARIANT LTO SKIP_MRPROPER KERNEL_CMDLINE_CONSOLE_AUTO
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
           export BUILD_VENDOR_BOOT_IMG VENDOR_RAMDISK_BINARY
+          # Re-apply the narrow normalization immediately before build.sh so any
+          # preparation/configuration step cannot reintroduce the known redundant metadata.
+          bash scripts/normalize-creek-defconfig.sh "$KP"
+          DEFCONFIG="$KP/msm-kernel/arch/arm64/configs/gki_defconfig"
+          test -f "$DEFCONFIG"
+          if grep -nE '^(CONFIG_XLOGCHAR=m|# (BEGIN|END) Audio_Xlog)
+      - name: Final safety verification
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify-creek-safe-output.sh "$KP" "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
+
+      - name: Package release artifacts
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf artifacts/release artifacts/modules artifacts/adapter-module Creek-Nethunter-gki-candidate.zip Creek-Nethunter-adapters-modules.zip
+          mkdir -p artifacts/release artifacts/modules artifacts/adapter-module/modules
+          # Release package contains only kernel test inputs and a deliberately
+          # minimal external-adapter module set. Do NOT ship the generated
+          # vendor_boot.img: this build still uses historical module-list inputs,
+          # so the phone's current Android 16 vendor_boot must remain untouched.
+          test -s "$DIST_DIR/Image"
+          cp "$DIST_DIR/Image" artifacts/release/Image
+          if [ -s "$DIST_DIR/Image.gz" ]; then cp "$DIST_DIR/Image.gz" artifacts/release/Image.gz; fi
+
+          echo "== ADAPTER PACKAGE =="
+          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh"             "$OUT_DIR/staging" artifacts/modules
+          test -s artifacts/modules/MODULE-LIST.txt
+          test ! -e artifacts/modules/qca_cld3_wlan.ko
+
+          # Package as a KernelSU-compatible module. Keep payload inside the
+          # module directory (no /system overlay, no metamodule requirement).
+          # Deliberately omit service.sh/post-fs-data.sh: nothing loads at boot.
+          cp -a artifacts/modules/. artifacts/adapter-module/modules/
+          cp scripts/nhd artifacts/adapter-module/nhd
+          cp scripts/nh-load.sh artifacts/adapter-module/nh-load.sh
+          cp scripts/nh-action.sh artifacts/adapter-module/action.sh
+          cat > artifacts/adapter-module/module.prop <<'EOF_MODULE'
+          id=creek_nethunter_adapters
+          name=Creek NetHunter Adapter Modules (On-Demand)
+          version=0.1.0
+          versionCode=100
+          author=Ferztie666
+          description=KernelSU adapter module; external drivers load only when explicitly requested, never at boot
+          EOF_MODULE
+          cat > artifacts/adapter-module/customize.sh <<'EOF_CUSTOMIZE'
+          # Permission setup only; deliberately does not load any modules.
+          set_perm "$MODPATH/nhd" 0 0 0755
+          set_perm "$MODPATH/nh-load.sh" 0 0 0755
+          set_perm "$MODPATH/action.sh" 0 0 0755
+          set_perm_recursive "$MODPATH/modules" 0 0 0755 0644
+          EOF_CUSTOMIZE
+          (cd artifacts/release && sha256sum -- * > SHA256SUMS)
+          (cd artifacts/modules && sha256sum -- *.ko > SHA256SUMS)
+          (cd artifacts/adapter-module && zip -r9 -q "$GITHUB_WORKSPACE/Creek-Nethunter-adapters-modules.zip" .)
+
+          printf '%s\n'             'Creek NetHunter GKI build candidate (ABI/KMI unverified)'             'Kernel family: 5.15.167-android13-8'             'ABI checker bypass: not used; upstream ABI/KMI checker remains enabled'             'KernelSU kernel integration: NOT VERIFIED; do not assume root survives this image'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'The upstream ABI/KMI checker must pass; device-side proprietary-module compatibility is still unverified.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
+
+          # Keep the patched internal Qualcomm WLAN driver separate from USB adapters.
+          # This is an audit/test payload only: do not install or flash it until the
+          # device's stock WLAN module ABI, vermagic, symbol dependencies and load path
+          # have been verified on the exact Android 16 build.
+          mkdir -p artifacts/internal-wlan
+          QCA_MODULE="$(find "$OUT_DIR/staging/lib/modules" -type f -name qca_cld3_wlan.ko -print -quit)"
+          test -n "$QCA_MODULE" && test -s "$QCA_MODULE"
+          cp "$QCA_MODULE" artifacts/internal-wlan/qca_cld3_wlan.ko
+          {
+            echo "Creek internal Qualcomm WLAN module - AUDIT/TEST ONLY"
+            echo "Module: qca_cld3_wlan.ko"
+            echo "Purpose: patched QCACLD driver for internal WLAN (wlan0), not USB adapters"
+            echo "Status: NOT FLASH-READY; device-side ABI/KMI, vermagic, symbols, dependencies and module load path are unverified"
+            echo "Do not replace or unload the stock Qualcomm WLAN driver on a daily-use device."
+            echo "Do not force con_mode or unload WLAN at boot."
+          } > artifacts/internal-wlan/INSTALL-GATE.txt
+          (cd artifacts/internal-wlan && sha256sum -- qca_cld3_wlan.ko > SHA256SUMS)
+          (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-candidate.zip release)
+          (cd artifacts && zip -r9 -q ../Creek-Nethunter-internal-wlan-audit.zip internal-wlan)
+          unzip -tq Creek-Nethunter-gki-candidate.zip
+          unzip -tq Creek-Nethunter-adapters-modules.zip
+          unzip -tq Creek-Nethunter-internal-wlan-audit.zip
+          unzip -Z1 Creek-Nethunter-adapters-modules.zip | sort > artifacts/logs/adapter-zip-file-list.txt
+          cp artifacts/modules/MODULE-STATUS.txt artifacts/logs/adapter-module-status.txt
+          cp artifacts/modules/MODULE-MANIFEST.txt artifacts/logs/adapter-module-manifest.txt
+          ls -lh Creek-Nethunter-*.zip
+          echo "INTERNAL_WLAN_AUDIT_PACKAGE=PASS"
+          echo "PACKAGE_RELEASE=PASS"
+
+      - name: Audit stock-module coexistence and release gate
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/verify-creek-stock-module-policy.sh
+          bash scripts/verify-creek-stock-module-policy.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/logs/stock-module-coexistence.txt"
+          cat artifacts/logs/stock-module-coexistence.txt
+
+      - name: Upload candidate artifacts
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: creek-nethunter-safe-build
+          path: |
+            artifacts/logs/
+            Creek-Nethunter-gki-candidate.zip
+            Creek-Nethunter-adapters-modules.zip
+            Creek-Nethunter-internal-wlan-audit.zip
+          if-no-files-found: warn
+ "$DEFCONFIG"; then
+            echo "ERROR: redundant XLOGCHAR metadata remains in the checked GKI defconfig" >&2
+            exit 1
+          fi
+          echo "[defconfig] pre-build target: $DEFCONFIG"
+          echo "[defconfig] remaining XLOGCHAR entries:"
+          grep -n 'XLOGCHAR' "$DEFCONFIG" || true
           build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
 
       - name: Final safety verification
