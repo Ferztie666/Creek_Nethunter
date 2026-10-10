@@ -189,6 +189,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
+          bash scripts/normalize-creek-defconfig.sh "$KP"
           cd "$KP"
           if [ "${{ inputs.jobs }}" = "auto" ]; then JOBS=2; else JOBS="${{ inputs.jobs }}"; fi
           export KERNEL_BUILD_JOBS="$JOBS"
