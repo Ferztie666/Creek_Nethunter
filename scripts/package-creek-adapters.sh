@@ -124,6 +124,7 @@ done
 sort -o "$OUT/MODULE-DEPENDS.txt" "$OUT/MODULE-DEPENDS.txt"
 cp "$SCRIPT_ROOT/scripts/nhd" "$OUT/nhd"
 cp "$SCRIPT_ROOT/scripts/nh-load.sh" "$OUT/nh-load.sh"
+cp "$SCRIPT_ROOT/scripts/nh-action.sh" "$OUT/action.sh"
 # Bind the package to the exact release string embedded in the built modules.
 # The staging directory name may omit the Android release suffix, so do not
 # use MODROOT's basename as a substitute for vermagic.
@@ -146,7 +147,7 @@ for n in "${!WANT[@]}"; do
 done
 [ -n "$KERNEL_RELEASE" ] || { echo "ERROR: no module vermagic found" >&2; exit 1; }
 printf '%s\n' "$KERNEL_RELEASE" > "$OUT/KERNEL-RELEASE"
-chmod 0755 "$OUT/nhd" "$OUT/nh-load.sh"
+chmod 0755 "$OUT/nhd" "$OUT/nh-load.sh" "$OUT/action.sh"
 cat > "$OUT/ON-DEMAND-LOADING.txt" <<'EOF_ON_DEMAND'
 Creek NetHunter adapter modules: KernelSU-compatible on-demand payload
 =======================================================================
