@@ -281,7 +281,7 @@ DEFCONFIG="gki_defconfig"
 merge_nethunter_config() {
   echo "[nethunter] merging nethunter.config after check_defconfig (preserve stock built-ins)"
   local config_file="${OUT_DIR}/.config"
-  local fragment="${KERNEL_DIR}/arch/arm64/configs/nethunter.config"
+  local fragment="$(cd "${KERNEL_DIR}" && pwd)/arch/arm64/configs/nethunter.config"
   test -s "${config_file}" || { echo "ERROR: GKI .config missing before NetHunter merge" >&2; return 1; }
   test -s "${fragment}" || { echo "ERROR: NetHunter fragment missing: ${fragment}" >&2; return 1; }
   (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
