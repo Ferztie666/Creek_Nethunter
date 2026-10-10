@@ -1,11 +1,11 @@
 diff --git a/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c b/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
-index 0000000..0000000 100644
 --- a/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
 +++ b/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
-@@
- int hdd_enable_monitor_mode(struct net_device *dev)
+@@ -102,7 +102,7 @@ int hdd_enable_monitor_mode(struct net_device *dev)
  {
  	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 -	uint8_t vdev_id;
 +	int vdev_id;
  	int ret;
+ #ifdef FEATURE_FRAME_INJECTION_SUPPORT
+ 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
