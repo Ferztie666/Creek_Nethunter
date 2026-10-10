@@ -146,7 +146,7 @@ s += """
 
 # Preserve stock defconfig validation, then apply adapter requests. merge_config -y
 # prevents an existing built-in (=y) option from being demoted to a module.
-DEFCONFIG="vendor/creek-gki_defconfig"
+DEFCONFIG="gki_defconfig"
 creek_nethunter_apply_adapter_config() {
   local config_file="${OUT_DIR}/.config"
   local fragment="${KERNEL_DIR}/arch/arm64/configs/creek-nethunter-adapters.config"
