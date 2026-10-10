@@ -141,7 +141,10 @@ for line in s.splitlines():
     if m: old_post.append(m.group(1))
 s=re.sub(r'^\s*DEFCONFIG\s*=.*$', '', s, flags=re.M)
 s=re.sub(r'^\s*POST_DEFCONFIG_CMDS\s*=.*$', '', s, flags=re.M)
-post='; '.join(old_post + ['check_defconfig', 'creek_nethunter_apply_adapter_config'])
+# Keep only upstream post-defconfig commands. Do not inject a new check_defconfig: the
+# pinned Creek source already owns its validation policy, and an extra check can
+# reject the generated config before the deferred adapter fragment is applied.
+post='; '.join(old_post + ['creek_nethunter_apply_adapter_config'])
 s += """
 
 # Preserve stock defconfig validation, then apply adapter requests. merge_config -y
