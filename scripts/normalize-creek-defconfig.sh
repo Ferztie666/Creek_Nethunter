@@ -3,39 +3,45 @@ set -euo pipefail
 
 ROOT="${1:?kernel_platform path required}"
 MSM="$ROOT/msm-kernel"
-CONFIGS="$MSM/arch/arm64/configs"
-BUILD_CONFIG="$MSM/build.config.msm.creek"
+EXPECTED="$MSM/arch/arm64/configs/vendor/creek-gki_defconfig"
 
-test -d "$CONFIGS" || { echo "ERROR: MSM arm64 config tree missing: $CONFIGS" >&2; exit 1; }
-test -f "$BUILD_CONFIG" || { echo "ERROR: Creek build config missing: $BUILD_CONFIG" >&2; exit 1; }
-test -d "$MSM/drivers" || { echo "ERROR: MSM drivers tree missing; cannot audit XLOGCHAR normalization" >&2; exit 1; }
-
-# Read the DEFCONFIG selected by the actual Creek build config. Do not assume
-# the vendor/creek-gki_defconfig path exists across source snapshots.
-DEFCONFIG_REL="$(sed -n 's/^[[:space:]]*DEFCONFIG[[:space:]]*=[[:space:]]*//p' "$BUILD_CONFIG" | tail -n1 | tr -d '"' | tr -d "'" | xargs || true)"
-if [ -z "$DEFCONFIG_REL" ]; then
-  echo "ERROR: build.config.msm.creek does not declare DEFCONFIG; refusing to edit a guessed file" >&2
-  exit 1
-fi
-DEFCONFIG="$CONFIGS/$DEFCONFIG_REL"
-if [ ! -f "$DEFCONFIG" ]; then
-  echo "ERROR: build.config.msm.creek selects '$DEFCONFIG_REL' but that file is absent." >&2
-  echo "Available likely Creek/GKI defconfigs:" >&2
-  find "$CONFIGS" -maxdepth 3 -type f \( -iname '*creek*defconfig' -o -path '*/gki_defconfig' \) -print | sort >&2
-  echo "Refusing to edit an unrelated defconfig; check source manifest/build-config pairing." >&2
-  exit 1
-fi
-
-if ! grep -RqsE '^[[:space:]]*config[[:space:]]+XLOGCHAR([[:space:]]|$)' "$MSM/drivers" --include='Kconfig*'; then
+test -d "$MSM" || { echo "ERROR: MSM source tree missing: $MSM" >&2; exit 1; }
+if ! grep -RqsE '^[[:space:]]*config[[:space:]]+XLOGCHAR([[:space:]]|$)' "$MSM" --include='Kconfig*'; then
   echo "ERROR: XLOGCHAR symbol declaration not found; refusing to normalize defconfig" >&2
   exit 1
 fi
 
-# Only remove the exact redundant setting shown in the savedefconfig diff and
-# its section-label comments. No other CONFIG_* value is changed.
-if grep -qx 'CONFIG_XLOGCHAR=m' "$DEFCONFIG"; then
-  sed -i '/^CONFIG_XLOGCHAR=m$/d' "$DEFCONFIG"
-  echo "[defconfig] removed explicit CONFIG_XLOGCHAR=m from $DEFCONFIG_REL"
+# Prefer the exact Creek defconfig named by the upstream check. If this source
+# snapshot stores it elsewhere, identify the unique defconfig containing the
+# exact redundant lines seen in savedefconfig output. Never edit a guessed
+# gki_defconfig or a file that does not contain those exact markers.
+if [ -f "$EXPECTED" ]; then
+  DEFCONFIG="$EXPECTED"
+else
+  mapfile -t CANDIDATES < <(
+    find "$ROOT" -type f -name '*defconfig' -print0 |
+      xargs -0 -r grep -lF 'CONFIG_XLOGCHAR=m' 2>/dev/null |
+      while IFS= read -r f; do
+        if grep -qF '# BEGIN Audio_Xlog' "$f" || grep -qF '# END Audio_Xlog' "$f"; then
+          printf '%s\n' "$f"
+        fi
+      done | sort -u
+  )
+  if [ "${#CANDIDATES[@]}" -ne 1 ]; then
+    echo "ERROR: expected defconfig absent and could not identify exactly one file containing the reported redundant XLOGCHAR metadata." >&2
+    echo "Expected: $EXPECTED" >&2
+    echo "Matching defconfigs: ${#CANDIDATES[@]}" >&2
+    printf '  %s\n' "${CANDIDATES[@]:-<none>}" >&2
+    echo "Refusing to edit an unrelated configuration." >&2
+    exit 1
+  fi
+  DEFCONFIG="${CANDIDATES[0]}"
 fi
-sed -i -e '/^# BEGIN Audio_Xlog$/d' -e '/^# END Audio_Xlog$/d' "$DEFCONFIG"
-echo "[defconfig] normalized only redundant XLOGCHAR metadata in $DEFCONFIG_REL"
+
+# Change only the exact lines reported by savedefconfig. The real upstream
+# check_defconfig/ABI/KMI gates remain enabled and will catch other mismatches.
+sed -i -e '/^CONFIG_XLOGCHAR=m$/d' \
+       -e '/^# BEGIN Audio_Xlog$/d' \
+       -e '/^# END Audio_Xlog$/d' "$DEFCONFIG"
+
+echo "[defconfig] normalized only redundant XLOGCHAR metadata in: $DEFCONFIG"
