@@ -56,6 +56,14 @@ need "$MON"
 grep -q 'cdp_get_mon_vdev_from_pdev' "$MON" || die "current QCACLD monitor API not present"
 grep -q 'cdp_set_monitor_mode' "$MON" || die "current QCACLD monitor enable API not present"
 grep -q 'cdp_reset_monitor_mode' "$MON" || die "current QCACLD monitor reset API not present"
+# cdp_get_mon_vdev_from_pdev returns a signed status/ID value. Keeping this
+# local as uint8_t turns a negative failure result into 255 and defeats the
+# existing < 0 guard before cdp_set_monitor_mode().
+ENABLE_MON="$(sed -n '/^int hdd_enable_monitor_mode/,/^int hdd_disable_monitor_mode/p' "$MON")"
+printf '%s\n' "$ENABLE_MON" | grep -q '^[[:space:]]*int vdev_id;' || die "monitor vdev_id must be signed int"
+if printf '%s\n' "$ENABLE_MON" | grep -q '^[[:space:]]*uint8_t vdev_id;'; then
+  die "unsigned monitor vdev_id can bypass negative-ID error handling"
+fi
 
 # Required feature source/config evidence.
 grep -Rqs 'FEATURE_MONITOR_MODE_SUPPORT' "$ROOT/vendor/qcom/opensource/wlan/qcacld-3.0/configs" \
