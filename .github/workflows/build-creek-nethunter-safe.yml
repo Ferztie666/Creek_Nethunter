@@ -197,12 +197,19 @@ jobs:
           export BUILD_CONFIG VARIANT LTO SKIP_MRPROPER KERNEL_CMDLINE_CONSOLE_AUTO
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
           export BUILD_VENDOR_BOOT_IMG VENDOR_RAMDISK_BINARY
-          # Re-apply the narrow normalization immediately before build.sh so any
-          # preparation/configuration step cannot reintroduce the known redundant metadata.
-          bash scripts/normalize-creek-defconfig.sh "$KP"
+          # Normalize the exact defconfig path named by the upstream check.
+          bash "$GITHUB_WORKSPACE/scripts/normalize-creek-defconfig.sh" "$KP"
           DEFCONFIG="$KP/msm-kernel/arch/arm64/configs/gki_defconfig"
           test -f "$DEFCONFIG"
-          if grep -nE '^(CONFIG_XLOGCHAR=m|# (BEGIN|END) Audio_Xlog)
+          if grep -nE '^(CONFIG_XLOGCHAR=m|# (BEGIN|END) Audio_Xlog)$' "$DEFCONFIG"; then
+            echo "ERROR: redundant XLOGCHAR metadata remains in the checked GKI defconfig" >&2
+            exit 1
+          fi
+          echo "[defconfig] pre-build target: $DEFCONFIG"
+          echo "[defconfig] remaining XLOGCHAR entries:"
+          grep -n 'XLOGCHAR' "$DEFCONFIG" || true
+          build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
+
       - name: Final safety verification
         if: success()
         shell: bash
