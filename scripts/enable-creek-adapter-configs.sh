@@ -152,14 +152,16 @@ s += """
 DEFCONFIG="gki_defconfig"
 creek_nethunter_apply_adapter_config() {
   local config_file="${OUT_DIR}/.config"
-  local fragment="${KERNEL_DIR}/arch/arm64/configs/creek-nethunter-adapters.config"
+  local kernel_dir
+  kernel_dir="$(cd "${KERNEL_DIR}" && pwd)"
+  local fragment="${kernel_dir}/arch/arm64/configs/creek-nethunter-adapters.config"
   test -s "${config_file}" || { echo "ERROR: MSM .config missing before adapter merge" >&2; return 1; }
   test -s "${fragment}" || { echo "ERROR: adapter fragment missing: ${fragment}" >&2; return 1; }
-  (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
+  KCONFIG_CONFIG="${config_file}" "${kernel_dir}/scripts/kconfig/merge_config.sh" -y -m "${config_file}" "${fragment}"
   local -a adapter_tool_args=() adapter_make_args=()
   read -r -a adapter_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a adapter_make_args <<< "${MAKE_ARGS:-}"
-  (cd "${KERNEL_DIR}" && make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig)
+  make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
   echo "[creek-nethunter] adapter fragment merged after stock defconfig check"
 }
 POST_DEFCONFIG_CMDS="__POST_COMMANDS__"
