@@ -1,7 +1,8 @@
 diff --git a/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c b/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
 --- a/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
 +++ b/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
-@@ -102,7 +102,7 @@ int hdd_enable_monitor_mode(struct net_device *dev)
+@@ -102,7 +102,7 @@
+ int hdd_enable_monitor_mode(struct net_device *dev)
  {
  	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 -	uint8_t vdev_id;
