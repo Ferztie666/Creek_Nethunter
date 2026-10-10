@@ -83,6 +83,22 @@ This avoids unsolicited module activation, but does not itself prove that every
 driver is safe or compatible when loaded; physical adapter testing is still
 required.
 
+## KernelSU root integration gate
+
+The adapter ZIP is packaged as a KernelSU-compatible userspace module, but that
+does **not** prove that the kernel image itself has KernelSU built-in or that a
+KernelSU LKM can load on the exact device build. The current workflow and
+repository scripts do not contain an explicit KernelSU kernel-source integration
+step. Keep the kernel candidate non-flashable until the user's current KernelSU
+mode (built-in versus LKM) and compatibility with this exact kernel build are
+verified. Do not label the kernel image as KernelSU-enabled based only on the
+adapter module's `module.prop`.
+
+The adapter package includes a KernelSU Manager Action (`action.sh`) that only
+reports module status. It deliberately does not load modules or change Wi-Fi
+state. Adapter modules remain manually/on-demand loaded through `nhd`; no
+boot-time service hook is included.
+
 ## Kernel ZIP status
 
 The current workflow output named `Creek-Nethunter-gki-candidate.zip` is a
