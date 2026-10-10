@@ -281,6 +281,15 @@ jobs:
           echo "INTERNAL_WLAN_AUDIT_PACKAGE=PASS"
           echo "PACKAGE_RELEASE=PASS"
 
+      - name: Audit stock-module coexistence and release gate
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/verify-creek-stock-module-policy.sh
+          bash scripts/verify-creek-stock-module-policy.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/logs/stock-module-coexistence.txt"
+          cat artifacts/logs/stock-module-coexistence.txt
+
       - name: Upload candidate artifacts
         if: success()
         uses: actions/upload-artifact@v6
