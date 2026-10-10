@@ -314,14 +314,6 @@ jobs:
             Creek-Nethunter-adapters-modules.zip
             Creek-Nethunter-internal-wlan-audit.zip
           if-no-files-found: warn
- "$DEFCONFIG"; then
-            echo "ERROR: redundant XLOGCHAR metadata remains in the checked GKI defconfig" >&2
-            exit 1
-          fi
-          echo "[defconfig] pre-build target: $DEFCONFIG"
-          echo "[defconfig] remaining XLOGCHAR entries:"
-          grep -n 'XLOGCHAR' "$DEFCONFIG" || true
-          build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
 
       - name: Final safety verification
         if: success()
