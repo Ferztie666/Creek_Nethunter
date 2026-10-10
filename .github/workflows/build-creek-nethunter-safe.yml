@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh; do bash -n "$f"; done
-          for f in scripts/nhd scripts/nh-load.sh; do sh -n "$f"; done
+          for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
           bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
 
       - name: Prepare Creek source layout and preserve ABI checker
@@ -223,6 +223,7 @@ jobs:
           cp -a artifacts/modules/. artifacts/adapter-module/modules/
           cp scripts/nhd artifacts/adapter-module/nhd
           cp scripts/nh-load.sh artifacts/adapter-module/nh-load.sh
+          cp scripts/nh-action.sh artifacts/adapter-module/action.sh
           cat > artifacts/adapter-module/module.prop <<'EOF_MODULE'
           id=creek_nethunter_adapters
           name=Creek NetHunter Adapter Modules (On-Demand)
@@ -235,6 +236,7 @@ jobs:
           # Permission setup only; deliberately does not load any modules.
           set_perm "$MODPATH/nhd" 0 0 0755
           set_perm "$MODPATH/nh-load.sh" 0 0 0755
+          set_perm "$MODPATH/action.sh" 0 0 0755
           set_perm_recursive "$MODPATH/modules" 0 0 0755 0644
           EOF_CUSTOMIZE
           (cd artifacts/release && sha256sum -- * > SHA256SUMS)
