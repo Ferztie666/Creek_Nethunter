@@ -10,6 +10,15 @@ It uses:
 - The stock Creek vendor_boot module lists captured from the device.
 - The qcacld monitor-mode/frame-injection port, applied after source sync.
 
+The workflow applies a narrowly scoped QCACLD fix before preflight: the monitor
+enable path stores a potentially negative monitor-vdev lookup result in a signed
+`int`, so the existing `vdev_id < 0` failure check cannot be bypassed by an
+unsigned conversion. The patch is applied only when the expected source context
+matches; otherwise the workflow fails rather than fuzzily patching the driver.
+This addresses a source-level error path but does not replace physical monitor
+mode stability testing.
+
+
 The workflow builds `boot.img`, `vendor_boot.img`, `vendor_dlkm.img`,
 `system_dlkm.img`, DTB/DTBO outputs, and all Xiaomi external modules. It also
 runs a placement check and uploads the build log and module-placement report.
