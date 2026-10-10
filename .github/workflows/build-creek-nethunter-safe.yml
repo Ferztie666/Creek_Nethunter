@@ -250,6 +250,31 @@ jobs:
           (cd artifacts/modules && sha256sum -- *.ko > SHA256SUMS)
           (cd artifacts/adapter-module && zip -r9 -q "$GITHUB_WORKSPACE/Creek-Nethunter-adapters-modules.zip" .)
 
+          # Reuse the original developer's AnyKernel3 layout; replace only Image.gz.
+          # This is still a CANDIDATE ZIP, not flash authorization.
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://github.com/dr1408/Creek_Nethunter/releases/download/V1.0/Creek-Nethunter-gki-AK3.zip" \
+            -o "$RUNNER_TEMP/Creek-Nethunter-upstream-AK3.zip"
+          mkdir -p artifacts/ak3
+          unzip -q "$RUNNER_TEMP/Creek-Nethunter-upstream-AK3.zip" -d artifacts/ak3
+          if [ -s "$DIST_DIR/Image.gz" ]; then
+            cp "$DIST_DIR/Image.gz" artifacts/ak3/Image.gz
+          else
+            gzip -n -c "$DIST_DIR/Image" > artifacts/ak3/Image.gz
+          fi
+          cat > artifacts/ak3/FLASH-GATE.txt <<'EOF_AK3_GATE'
+          CANDIDATE ONLY — NOT CLEARED TO FLASH
+          Base: original developer Creek AnyKernel3 layout (V1.0).
+          Image.gz: replaced by this workflow's custom build.
+          Kernel source family: 5.15.167-android13-8.
+          User's Android 16 stock kernel previously identified as 5.15.194-android13-8.
+          ABI/KMI and proprietary vendor module compatibility are not verified for the current phone.
+          Preserve the phone's existing vendor_boot, vendor_dlkm, and system_dlkm.
+          Do not flash until boot/AVB, KernelSU, ABI/KMI, and on-device recovery checks pass.
+          EOF_AK3_GATE
+          (cd artifacts/ak3 && zip -qr9 "$GITHUB_WORKSPACE/Creek-Nethunter-gki-AK3-candidate.zip" .)
+          unzip -tq Creek-Nethunter-gki-AK3-candidate.zip
+
           printf '%s\n'             'Creek NetHunter GKI build candidate (ABI/KMI unverified)'             'Kernel family: 5.15.167-android13-8'             'ABI checker bypass: not used; upstream ABI/KMI checker remains enabled'             'KernelSU kernel integration: NOT VERIFIED; do not assume root survives this image'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'The upstream ABI/KMI checker must pass; device-side proprietary-module compatibility is still unverified.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
 
           # Keep the patched internal Qualcomm WLAN driver separate from USB adapters.
@@ -272,6 +297,7 @@ jobs:
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-candidate.zip release)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-internal-wlan-audit.zip internal-wlan)
           unzip -tq Creek-Nethunter-gki-candidate.zip
+          unzip -tq Creek-Nethunter-gki-AK3-candidate.zip
           unzip -tq Creek-Nethunter-adapters-modules.zip
           unzip -tq Creek-Nethunter-internal-wlan-audit.zip
           unzip -Z1 Creek-Nethunter-adapters-modules.zip | sort > artifacts/logs/adapter-zip-file-list.txt
@@ -298,6 +324,7 @@ jobs:
           path: |
             artifacts/logs/
             Creek-Nethunter-gki-candidate.zip
+            Creek-Nethunter-gki-AK3-candidate.zip
             Creek-Nethunter-adapters-modules.zip
             Creek-Nethunter-internal-wlan-audit.zip
           if-no-files-found: warn
