@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/patch-creek-qcacld-monitor.sh; do bash -n "$f"; done
+          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh; do bash -n "$f"; done
           for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
           bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
 
