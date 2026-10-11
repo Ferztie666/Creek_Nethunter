@@ -85,9 +85,11 @@ rows=[]
 fragment_symbols={}
 # This optional Qualcomm gadget function is broken in the pinned source: usb_f_gsi.ko
 # references RNDIS exports that are absent from the resolved module set. Keep it disabled.
+# Disable the broken optional GSI gadget function in both config domains
+# unconditionally. The source's symbol scanner can miss symbols hidden behind
+# sourced Kconfig files; the final generated .config is verified below.
 for gsi_symbol in ("USB_F_GSI", "USB_CONFIGFS_F_GSI"):
-    if gsi_symbol in msyms:
-        fragment_symbols[gsi_symbol] = "n"
+    fragment_symbols[gsi_symbol] = "n"
     if gsi_symbol in csyms:
         subprocess.run([str(common/"scripts/config"), "--file", str(nhcfg), "-d", "CONFIG_"+gsi_symbol], check=True)
 for name in sorted(set(names)):
