@@ -113,14 +113,13 @@ jobs:
             exit 1
           }
           scripts/prepare-creek-stock.sh "$KP"
-          # Upstream prepare-creek-stock.sh intentionally applies the original
-          # builder's ABI-checker workaround. Record this honestly: this build
-          # cannot claim ABI/KMI verification, so it is candidate-only.
-          if grep -q 'BUT WHO CARES?' "$ABI_BEFORE"; then
-            echo "ABI/KMI=UNVERIFIED_UPSTREAM_WORKAROUND"
-          else
-            echo "ABI/KMI checker active; its pass/fail remains a build gate."
+          # The preparation script must never rewrite or bypass the ABI checker.
+          # Treat any marker as a hard failure before compilation.
+          if grep -qE 'BUT WHO CARES?|ABI_BYPASS|abi-bypass' "$ABI_BEFORE"; then
+            echo "ERROR: ABI/KMI checker bypass detected after preparation" >&2
+            exit 1
           fi
+          echo "ABI/KMI_CHECKER=ACTIVE; mismatch must fail the build."
 
       - name: Apply NetHunter configuration safely
         shell: bash
@@ -186,9 +185,11 @@ jobs:
             if [ -f "$f" ]; then ABI_CHECKER="$(readlink -f "$f")"; break; fi
           done
           test -n "$ABI_CHECKER"
-          if grep -q 'BUT WHO CARES?' "$ABI_CHECKER"; then
-            echo "WARNING: upstream ABI checker workaround is active; ABI/KMI is NOT verified."
+          if grep -qE 'BUT WHO CARES?|ABI_BYPASS|abi-bypass' "$ABI_CHECKER"; then
+            echo "ERROR: ABI/KMI checker bypass detected before build" >&2
+            exit 1
           fi
+          echo "ABI/KMI_CHECKER=ACTIVE"
 
       - name: Build
         shell: bash
@@ -202,6 +203,18 @@ jobs:
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
           export BUILD_VENDOR_BOOT_IMG VENDOR_RAMDISK_BINARY
           build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
+          # Never package a candidate if the build scripts changed or bypassed
+          # the authoritative ABI checker during compilation.
+          ABI_CHECKER=""
+          for f in "$KP/build/abi/compare_to_symbol_list" "$KP/build/kernel/abi/compare_to_symbol_list"; do
+            if [ -f "$f" ]; then ABI_CHECKER="$(readlink -f "$f")"; break; fi
+          done
+          test -n "$ABI_CHECKER"
+          if grep -qE 'BUT WHO CARES?|ABI_BYPASS|abi-bypass' "$ABI_CHECKER"; then
+            echo "ERROR: ABI/KMI checker bypass detected after build" >&2
+            exit 1
+          fi
+          echo "ABI/KMI_CHECKER=ACTIVE_AFTER_BUILD"
 
       - name: Final safety verification
         if: success()
@@ -278,14 +291,14 @@ jobs:
           Image.gz: replaced by this workflow's custom build.
           Kernel source family: 5.15.167-android13-8.
           User's Android 16 stock kernel previously identified as 5.15.194-android13-8.
-          ABI/KMI and proprietary vendor module compatibility are not verified for the current phone. The upstream ABI-checker workaround may be active; this is candidate-only.
+          The build must pass the upstream ABI/KMI check without any checker bypass. Proprietary vendor module compatibility on the current Android 16 phone remains unverified; this is candidate-only.
           Preserve the phone's existing vendor_boot, vendor_dlkm, and system_dlkm.
           Do not flash until boot/AVB, KernelSU, ABI/KMI, and on-device recovery checks pass.
           EOF_AK3_GATE
           (cd artifacts/ak3 && zip -qr9 "$GITHUB_WORKSPACE/Creek-Nethunter-gki-AK3-candidate.zip" .)
           unzip -tq Creek-Nethunter-gki-AK3-candidate.zip
 
-          printf '%s\n'             'Creek NetHunter GKI build candidate (ABI/KMI unverified)'             'Kernel family: 5.15.167-android13-8'             'ABI checker: upstream workaround may be active; ABI/KMI NOT VERIFIED'             'KernelSU kernel integration: NOT VERIFIED; do not assume root survives this image'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'ABI/KMI is unverified if the upstream workaround is active; device-side proprietary-module compatibility is also unverified.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
+          printf '%s\n'             'Creek NetHunter GKI build candidate (upstream ABI/KMI gate required)'             'Kernel family: 5.15.167-android13-8'             'ABI checker: active; bypass markers are fatal'             'KernelSU kernel integration: NOT VERIFIED; do not assume root survives this image'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'Build-time ABI/KMI check must pass without bypass; device-side proprietary-module compatibility is still unverified.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
 
           # Keep the patched internal Qualcomm WLAN driver separate from USB adapters.
           # This is an audit/test payload only: do not install or flash it until the
