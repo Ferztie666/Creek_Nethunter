@@ -83,7 +83,14 @@ def symbols_in(root):
 csyms=symbols_in(common); msyms=symbols_in(msm)
 rows=[]
 fragment_symbols={}
-# This optional Qualcomm gadget function is broken in the pinned source: usb_f_gsi.ko\n# references RNDIS exports that are absent from the resolved module set. Keep it disabled.\nfor gsi_symbol in ("USB_F_GSI", "USB_CONFIGFS_F_GSI"):\n    if gsi_symbol in msyms:\n        fragment_symbols[gsi_symbol] = "n"\n    if gsi_symbol in csyms:\n        subprocess.run([str(common/"scripts/config"), "--file", str(nhcfg), "-d", "CONFIG_"+gsi_symbol], check=True)\nfor name in sorted(set(names)):
+# This optional Qualcomm gadget function is broken in the pinned source: usb_f_gsi.ko
+# references RNDIS exports that are absent from the resolved module set. Keep it disabled.
+for gsi_symbol in ("USB_F_GSI", "USB_CONFIGFS_F_GSI"):
+    if gsi_symbol in msyms:
+        fragment_symbols[gsi_symbol] = "n"
+    if gsi_symbol in csyms:
+        subprocess.run([str(common/"scripts/config"), "--file", str(nhcfg), "-d", "CONFIG_"+gsi_symbol], check=True)
+for name in sorted(set(names)):
     sym=aliases.get(name, name.upper())
     # Candidate aliases for in-tree wireless/driver naming differences.
     candidates=[sym]
