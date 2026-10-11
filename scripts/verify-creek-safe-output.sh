@@ -51,12 +51,10 @@ for f in "$KP/build/abi/compare_to_symbol_list" "$KP/build/kernel/abi/compare_to
   if [ -f "$f" ]; then ABI="$(readlink -f "$f")"; break; fi
 done
 [ -n "$ABI" ] || die "ABI checker not found"
-if grep -q 'BUT WHO CARES?' "$ABI"; then
-  echo "WARNING: upstream ABI checker workaround is active; ABI/KMI is NOT verified." | tee -a "$LOGDIR/final-gate.txt"
-  echo "ABI_BYPASS=ACTIVE_UPSTREAM_WORKAROUND" | tee -a "$LOGDIR/final-gate.txt"
-else
-  echo "ABI_BYPASS=NOT_DETECTED" | tee -a "$LOGDIR/final-gate.txt"
+if grep -qE 'BUT WHO CARES?|ABI_BYPASS|abi-bypass' "$ABI"; then
+  die "ABI checker contains a bypass marker; refusing candidate release"
 fi
+echo "ABI_BYPASS=NOT_DETECTED" | tee -a "$LOGDIR/final-gate.txt"
 
 # Module ABI metadata must be present and tied to the build.
 SYMVERS=""
