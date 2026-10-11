@@ -289,6 +289,14 @@ merge_nethunter_config() {
   test -s "${config_file}" || { echo "ERROR: GKI .config missing before NetHunter merge" >&2; return 1; }
   test -s "${fragment}" || { echo "ERROR: NetHunter fragment missing: ${fragment}" >&2; return 1; }
   (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
+
+  # USB_F_GSI is broken in this pinned 5.15 source: its module references
+  # RNDIS helper symbols that are not exported by the selected RNDIS config.
+  # Disable it in the *final generated GKI config* after fragment merging,
+  # then rerun olddefconfig and assert Kconfig did not re-enable it.
+  # This is a feature-specific configuration fix, not a depmod/ABI bypass.
+  "${KERNEL_DIR}/scripts/config" --file "${config_file}" -d CONFIG_USB_F_GSI
+
   # build.sh exports TOOL_ARGS and MAKE_ARGS as whitespace-delimited strings
   # in this branch, not Bash arrays. Parse them into arrays and run Kbuild
   # from KERNEL_DIR; otherwise the combined TOOL_ARGS string is passed as one
@@ -297,6 +305,12 @@ merge_nethunter_config() {
   read -r -a nh_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a nh_make_args <<< "${MAKE_ARGS:-}"
   (cd "${KERNEL_DIR}" && make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" olddefconfig)
+  if ! grep -qx '# CONFIG_USB_F_GSI is not set' "${config_file}"; then
+    echo "ERROR: CONFIG_USB_F_GSI remains enabled after final olddefconfig" >&2
+    grep -n 'CONFIG_USB_F_GSI' "${config_file}" >&2 || true
+    return 1
+  fi
+  echo "[nethunter] verified CONFIG_USB_F_GSI is disabled in final GKI config"
 }
 POST_DEFCONFIG_CMDS="check_defconfig; merge_nethunter_config"
 EOF_GKI_NETHUNTER
