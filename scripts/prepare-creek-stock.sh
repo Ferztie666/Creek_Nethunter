@@ -272,6 +272,53 @@ if [ ! -e "$VENDOR_DTS/bindings" ] && [ -e "$ROOT/kernel-devicetree/bindings" ];
   ln -s "$ROOT/kernel-devicetree/bindings" "$VENDOR_DTS/bindings"
 fi
 
+# Creek safety fix: the pinned common tree's usb_f_gsi.ko references rndis_* APIs
+# that are unresolved in this build's module set. Disable only this optional GSI
+# gadget object; keep standard USB RNDIS/HID/serial gadget functions untouched.
+# This is a compile-time source guard, NOT an ABI/depmod bypass.
+USB_GSI_MAKEFILE="$COMMON/drivers/usb/gadget/function/Makefile"
+if [ -f "$USB_GSI_MAKEFILE" ]; then
+  python3 - "$USB_GSI_MAKEFILE" <<'PY_DISABLE_GSI'
+from pathlib import Path
+import re, sys
+p = Path(sys.argv[1])
+s = p.read_text()
+active = re.compile(r'^(\\s*)obj-\\$\\(CONFIG_USB_F_GSI\\)(\\s*\\+=\\s*usb_f_gsi\\.o\\s*)
+echo "ROOT=$ROOT"
+echo "KERNEL=$KERNEL"
+echo "VENDOR_DTS=$VENDOR_DTS"
+echo "BUILD_SH=$BUILD_SH -> $(readlink "$BUILD_SH" 2>/dev/null || true)"
+echo "REAL_BUILD_SH=$REAL_BUILD_SH"
+echo "REAL_GETTOP=$(dirname "$REAL_BUILD_SH")/gettop.sh"
+test -f "$(dirname "$REAL_BUILD_SH")/gettop.sh"
+ls -la "$VENDOR_DTS"
+, re.M)
+matches = list(active.finditer(s))
+if len(matches) == 1:
+    s = active.sub(r'\\1# CREEK_DISABLE_BROKEN_USB_GSI: unresolved rndis_* references; standard RNDIS stays enabled\\n# obj-$(CONFIG_USB_F_GSI) += usb_f_gsi.o', s, count=1)
+    p.write_text(s)
+elif len(matches) == 0 and 'CREEK_DISABLE_BROKEN_USB_GSI' in s:
+    pass
+else:
+    raise SystemExit(f"ERROR: expected exactly one active USB_F_GSI object rule in {p}; found {len(matches)}")
+if re.search(r'^\\s*obj-\\$\\(CONFIG_USB_F_GSI\\)\\s*\\+=\\s*usb_f_gsi\\.o\\s*
+echo "ROOT=$ROOT"
+echo "KERNEL=$KERNEL"
+echo "VENDOR_DTS=$VENDOR_DTS"
+echo "BUILD_SH=$BUILD_SH -> $(readlink "$BUILD_SH" 2>/dev/null || true)"
+echo "REAL_BUILD_SH=$REAL_BUILD_SH"
+echo "REAL_GETTOP=$(dirname "$REAL_BUILD_SH")/gettop.sh"
+test -f "$(dirname "$REAL_BUILD_SH")/gettop.sh"
+ls -la "$VENDOR_DTS"
+, p.read_text(), re.M):
+    raise SystemExit("ERROR: USB_F_GSI object rule remains active")
+print(f"[creek-safety] optional usb_f_gsi.o disabled in {p}")
+PY_DISABLE_GSI
+else
+  echo "ERROR: expected USB gadget Makefile missing: $USB_GSI_MAKEFILE" >&2
+  exit 1
+fi
+
 echo "Prepared Creek stock source layout"
 echo "ROOT=$ROOT"
 echo "KERNEL=$KERNEL"
