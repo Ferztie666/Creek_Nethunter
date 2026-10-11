@@ -116,16 +116,11 @@ if [ -f "$GKI_MODULES_LIST" ]; then
   done
 fi
 
-# Creek GKI enables CONFIG_TRIM_UNUSED_KSYMS through TRIM_NONLISTED_KMI in
-# build.config.gki.aarch64. Disable that broad export trimming so MSM/vendor
-# NetHunter wireless modules can link against the normal common GKI exports.
-# KMI strict mode depends on TRIM_NONLISTED_KMI in Android build.sh, so disable
-# that paired check too.
-GKI_AARCH64_CONFIG="$COMMON/build.config.gki.aarch64"
-if [ -f "$GKI_AARCH64_CONFIG" ]; then
-  sed -i '/^TRIM_NONLISTED_KMI=/d' "$GKI_AARCH64_CONFIG"
-  sed -i '/^KMI_SYMBOL_LIST_STRICT_MODE=/d' "$GKI_AARCH64_CONFIG"
-fi
+# Do not modify build.config.gki.aarch64 to weaken KMI enforcement.
+# TRIM_NONLISTED_KMI and KMI_SYMBOL_LIST_STRICT_MODE remain controlled by the
+# pinned upstream source. If a requested external module fails the real KMI
+# gate, treat that as a compatibility failure and resolve it explicitly rather
+# than disabling the gate or broadening exports speculatively.
 : > "$NETHUNTER_CONFIG"
 CFG="$COMMON/scripts/config --file $NETHUNTER_CONFIG"
 
