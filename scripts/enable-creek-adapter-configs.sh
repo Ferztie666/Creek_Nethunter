@@ -83,7 +83,7 @@ def symbols_in(root):
 csyms=symbols_in(common); msyms=symbols_in(msm)
 rows=[]
 fragment_symbols={}
-for name in sorted(set(names)):
+# This optional Qualcomm gadget function is broken in the pinned source: usb_f_gsi.ko\n# references RNDIS exports that are absent from the resolved module set. Keep it disabled.\nfor gsi_symbol in ("USB_F_GSI", "USB_CONFIGFS_F_GSI"):\n    if gsi_symbol in msyms:\n        fragment_symbols[gsi_symbol] = "n"\n    if gsi_symbol in csyms:\n        subprocess.run([str(common/"scripts/config"), "--file", str(nhcfg), "-d", "CONFIG_"+gsi_symbol], check=True)\nfor name in sorted(set(names)):
     sym=aliases.get(name, name.upper())
     # Candidate aliases for in-tree wireless/driver naming differences.
     candidates=[sym]
@@ -158,11 +158,19 @@ creek_nethunter_apply_adapter_config() {
   test -s "${config_file}" || { echo "ERROR: MSM .config missing before adapter merge" >&2; return 1; }
   test -s "${fragment}" || { echo "ERROR: adapter fragment missing: ${fragment}" >&2; return 1; }
   KCONFIG_CONFIG="${config_file}" "${kernel_dir}/scripts/kconfig/merge_config.sh" -y -m "${config_file}" "${fragment}"
+  # Force-disable the optional GSI function after all fragments. The pinned
+  # usb_f_gsi.ko has unresolved RNDIS API references and makes depmod fatal.
+  "${kernel_dir}/scripts/config" --file "${config_file}" -d CONFIG_USB_F_GSI -d CONFIG_USB_CONFIGFS_F_GSI
   local -a adapter_tool_args=() adapter_make_args=()
   read -r -a adapter_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a adapter_make_args <<< "${MAKE_ARGS:-}"
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
-  echo "[creek-nethunter] adapter fragment merged after stock defconfig check"
+  if grep -Eq "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=(y|m)$" "${config_file}"; then
+    echo "ERROR: broken GSI gadget remains enabled after config merge" >&2
+    grep -E "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=" "${config_file}" >&2 || true
+    return 1
+  fi
+  echo "[creek-nethunter] adapter fragment merged; broken GSI gadget disabled"
 }
 POST_DEFCONFIG_CMDS="__POST_COMMANDS__"
 """
