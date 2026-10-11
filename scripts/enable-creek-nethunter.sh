@@ -290,9 +290,12 @@ merge_nethunter_config() {
   test -s "${fragment}" || { echo "ERROR: NetHunter fragment missing: ${fragment}" >&2; return 1; }
   (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
 
-  # Disable GSI in common/GKI if this Kconfig domain defines the symbol.
-  # The separate MSM adapter hook validates its own effective .config.
-  "${KERNEL_DIR}/scripts/config" --file "${config_file}" -d CONFIG_USB_F_GSI
+  # Disable both spellings in common/GKI. In this pinned source the GSI
+  # gadget can be selected through CONFIG_USB_CONFIGFS_F_GSI rather than
+  # CONFIG_USB_F_GSI; disabling only one name left usb_f_gsi.ko in the build
+  # and depmod then failed on unresolved rndis_* symbols. Keep RNDIS itself
+  # available; only disable the optional GSI function.
+  "${KERNEL_DIR}/scripts/config" --file "${config_file}" -d CONFIG_USB_F_GSI -d CONFIG_USB_CONFIGFS_F_GSI
 
   local -a nh_tool_args=() nh_make_args=()
   read -r -a nh_tool_args <<< "${TOOL_ARGS:-}"
