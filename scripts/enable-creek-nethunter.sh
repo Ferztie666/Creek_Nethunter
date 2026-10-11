@@ -166,6 +166,11 @@ $CFG \
 $CFG \
   -e CONFIG_RFKILL \
   -e CONFIG_NET_L3_MASTER_DEV \
+# USB_F_GSI has unresolved references to the RNDIS helper API in this pinned 5.15 tree.
+# RNDIS itself remains enabled; disable only the optional GSI gadget function to
+# prevent depmod from accepting a module with unknown symbols.
+$CFG -d CONFIG_USB_F_GSI
+$CFG \
   -e CONFIG_USB_F_RNDIS \
   -m CONFIG_USB_U_ETHER \
   -e CONFIG_BT_HCIBTUSB \
