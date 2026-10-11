@@ -63,13 +63,13 @@ apply_patch_file() {
   elif git -C "$tree" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
     echo "[nethunter] $name already applied"
   else
-    echo "[nethunter] git apply failed for $name, trying patch --dry-run"
-    if (cd "$tree" && patch -p1 --dry-run < "$patch_file" >/dev/null); then
-      (cd "$tree" && patch -p1 < "$patch_file")
-    elif (cd "$tree" && patch -R -p1 --dry-run < "$patch_file" >/dev/null); then
+    echo "[nethunter] git apply failed for $name; allowing only zero-fuzz patch application"
+    if (cd "$tree" && patch --fuzz=0 -p1 --dry-run < "$patch_file" >/dev/null); then
+      (cd "$tree" && patch --fuzz=0 -p1 < "$patch_file")
+    elif (cd "$tree" && patch --fuzz=0 -R -p1 --dry-run < "$patch_file" >/dev/null); then
       echo "[nethunter] $name already applied"
     else
-      echo "ERROR: $name does not apply cleanly to $tree" >&2
+      echo "ERROR: $name does not apply with exact context to $tree" >&2
       exit 1
     fi
   fi
