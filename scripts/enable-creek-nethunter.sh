@@ -164,6 +164,9 @@ $CFG \
 # NetHunter: Bluetooth USB, SDR, CAN, USB serial, TTL, IP set.
 $CFG \
   -e CONFIG_RFKILL \
+  # VXLAN in the MSM module set references this GKI-exported L3-master helper.
+  # Keep the provider enabled in the common GKI image so modpost can resolve it.
+  -e CONFIG_NET_L3_MASTER_DEV \
   -e CONFIG_BT_HCIBTUSB \
   -e CONFIG_BT_HCIBTUSB_BCM \
   -e CONFIG_BT_HCIBTUSB_RTL \
