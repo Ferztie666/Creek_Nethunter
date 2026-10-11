@@ -305,12 +305,37 @@ merge_nethunter_config() {
   read -r -a nh_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a nh_make_args <<< "${MAKE_ARGS:-}"
   (cd "${KERNEL_DIR}" && make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" olddefconfig)
-  if ! grep -qx '# CONFIG_USB_F_GSI is not set' "${config_file}"; then
-    echo "ERROR: CONFIG_USB_F_GSI remains enabled after final olddefconfig" >&2
-    grep -n 'CONFIG_USB_F_GSI' "${config_file}" >&2 || true
+  # This is the *common/GKI* .config. In this pinned source tree,
+  # USB_F_GSI may not be a symbol in the common Kconfig domain at all; the
+  # usb_f_gsi.ko seen in staging can originate from the separate MSM build.
+  # Therefore absence from this config is not evidence that it is enabled.
+  # Fail only if this config explicitly resolves the symbol to y or m. The
+  # MSM adapter hook independently checks its own effective .config.
+  if grep -Eq '^CONFIG_USB_F_GSI=(y|m)
+}
+POST_DEFCONFIG_CMDS="check_defconfig; merge_nethunter_config"
+EOF_GKI_NETHUNTER
+echo "[nethunter] inner GKI config: $GKI_BUILD_CONFIG_FILE"
+echo "[nethunter] using config fragment: $NETHUNTER_CONFIG"
+
+# Helpful build snapshots.
+mkdir -p "$ROOT/nethunter-debug"
+{
+  echo "# Creek NetHunter config additions"
+  grep -E 'CONFIG_(BBG|TCP_CONG_BBR3|DEFAULT_BBR3|DEFAULT_TCP_CONG|SYSVIPC|PID_NS|USER_NS|POSIX_MQUEUE|NFS|NFSD|USB_AIRSPY|USB_HACKRF|IP_SET|NET_SCH_CAKE|NET_SCH_PIE|NET_SCH_FQ_PIE)=' "$NETHUNTER_CONFIG" || true
+} > "$ROOT/nethunter-debug/nethunter-config-summary.txt"
+
+echo "[nethunter] Creek NetHunter common patches/configs enabled"
+ "${config_file}"; then
+    echo "ERROR: CONFIG_USB_F_GSI is enabled in final GKI config" >&2
+    grep -n '^CONFIG_USB_F_GSI=' "${config_file}" >&2 || true
     return 1
   fi
-  echo "[nethunter] verified CONFIG_USB_F_GSI is disabled in final GKI config"
+  if grep -qx '# CONFIG_USB_F_GSI is not set' "${config_file}"; then
+    echo "[nethunter] verified CONFIG_USB_F_GSI disabled in final GKI config"
+  else
+    echo "[nethunter] CONFIG_USB_F_GSI is absent from common/GKI .config; MSM config is checked separately"
+  fi
 }
 POST_DEFCONFIG_CMDS="check_defconfig; merge_nethunter_config"
 EOF_GKI_NETHUNTER
