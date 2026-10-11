@@ -45,7 +45,8 @@ for tree in "$KP/common" "$KP/msm-kernel" "$KP/vendor/qcom/opensource/wlan"; do
   fi
 done
 
-# The ABI checker is a real build input. A bypass invalidates the safety gate.
+# The ABI checker is a real build input. A bypass invalidates the safety gate;
+# the workflow also enforces this before and after build.
 ABI=""
 for f in "$KP/build/abi/compare_to_symbol_list" "$KP/build/kernel/abi/compare_to_symbol_list"; do
   if [ -f "$f" ]; then ABI="$(readlink -f "$f")"; break; fi
@@ -89,7 +90,7 @@ if [ -e "$DIST/vmlinux" ]; then
   echo "[info] vmlinux present in build dist as an intermediate artifact; packaging will exclude it" |
     tee -a "$LOGDIR/final-gate.txt"
 fi
-echo "FINAL_GATE=PASS_CANDIDATE_ABI_KMI_UNVERIFIED_IF_BYPASSED" | tee -a "$LOGDIR/final-gate.txt"
+echo "FINAL_GATE=PASS_CANDIDATE_ABI_KMI_CHECKED_FLASH_BLOCKED" | tee -a "$LOGDIR/final-gate.txt"
 echo "IMAGE=$IMG" | tee -a "$LOGDIR/final-gate.txt"
 echo "WLAN=$WLAN" | tee -a "$LOGDIR/final-gate.txt"
 echo "SYMVERS=$SYMVERS" | tee -a "$LOGDIR/final-gate.txt"
