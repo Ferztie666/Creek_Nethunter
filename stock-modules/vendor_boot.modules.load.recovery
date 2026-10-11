@@ -174,7 +174,6 @@ f_fs_ipc_log.ko
 usb_f_cdev.ko
 usb_f_ccid.ko
 usb_f_qdss.ko
-usb_f_gsi.ko
 usb_f_diag.ko
 ucsi_glink.ko
 tcpc_sc660x.ko
