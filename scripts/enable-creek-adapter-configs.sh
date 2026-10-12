@@ -136,7 +136,9 @@ for symbol in ("WLAN_VENDOR_REALTEK","WLAN_VENDOR_MEDIATEK","MAC80211_LEDS","MAC
 # helpers are not exported by the approved mixed-tree KMI. Keep these optional
 # targets disabled until a source/KMI-compatible implementation is verified;
 # do not weaken modpost or the upstream ABI checker.
-for symbol in ("NET_NSH", "OPENVSWITCH", "VXLAN", "GENEVE"):
+# batman-adv also imports bridge/IPv6 multicast helpers that are not exported by this pinned Creek GKI KMI.
+# Keep this optional mesh networking module disabled rather than relaxing modpost/KMI.
+for symbol in ("NET_NSH", "OPENVSWITCH", "VXLAN", "GENEVE", "BATMAN_ADV"):
     fragment_symbols[symbol] = "n"
 fragment.write_text("# Creek NetHunter adapter requests; merged after stock defconfig checks.\n"+"".join(f"CONFIG_{sym}={value}\n" for sym,value in sorted(fragment_symbols.items())))
 report.write_text("module\tstatus\tdetail\n"+"".join("\t".join(r)+"\n" for r in rows))
