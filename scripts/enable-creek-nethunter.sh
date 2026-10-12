@@ -107,12 +107,10 @@ if [ -f "$GKI_MODULES_LIST" ]; then
     -e '/^drivers\/net\/wireless\/mediatek\//d' \
     -e '/^drivers\/net\/wireless\/realtek\//d' \
     "$GKI_MODULES_LIST"
-  for module in \
-    net/ipv4/tcp_bic.ko \
-    net/ipv4/tcp_westwood.ko \
-    net/ipv4/tcp_htcp.ko; do
-    grep -qxF "$module" "$GKI_MODULES_LIST" || echo "$module" >> "$GKI_MODULES_LIST"
-  done
+  # Do not add advanced TCP congestion modules: Creek's pinned GKI defconfig
+  # has CONFIG_TCP_CONG_ADVANCED disabled. Enabling it introduces the
+  # tcp_cong_avoid_ai export, which is absent from this revision's approved KMI
+  # symbol list and correctly fails the upstream ABI gate.
 fi
 
 # Do not modify build.config.gki.aarch64 to weaken KMI enforcement.
@@ -139,12 +137,12 @@ $CFG -e CONFIG_BBG \
   --set-str CONFIG_LSM "landlock,lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"
 sed -i '/^[[:space:]]*config[[:space:]]\+LSM$/,/^[[:space:]]*help[[:space:]]*$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' "$COMMON/security/Kconfig"
 
-# Keep the pinned GKI TCP ABI baseline. BBRv3 backport changes TCP core
-# structures and is not enabled until it can pass the authoritative KMI check.
-# Retain stock BBR and the requested traffic schedulers without the BBRv3 patch.
+# Preserve the pinned Creek GKI TCP ABI baseline. The stock defconfig
+# explicitly leaves CONFIG_TCP_CONG_ADVANCED disabled; enabling it adds the
+# tcp_cong_avoid_ai export that is not present in this revision's KMI symbol
+# list. Do not force advanced congestion control or BBR into the NetHunter
+# fragment. BBRv3 remains disabled pending a separately validated KMI baseline.
 $CFG \
-  -e CONFIG_TCP_CONG_ADVANCED \
-  -e CONFIG_TCP_CONG_BBR \
   -e CONFIG_NET_SCH_FQ \
   -e CONFIG_NET_SCH_FQ_CODEL \
   -e CONFIG_NET_SCH_CAKE \
