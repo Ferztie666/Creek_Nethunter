@@ -137,12 +137,15 @@ $CFG -e CONFIG_BBG \
   --set-str CONFIG_LSM "landlock,lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"
 sed -i '/^[[:space:]]*config[[:space:]]\+LSM$/,/^[[:space:]]*help[[:space:]]*$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' "$COMMON/security/Kconfig"
 
-# Preserve the pinned Creek GKI TCP ABI baseline. The stock defconfig
-# explicitly leaves CONFIG_TCP_CONG_ADVANCED disabled; enabling it adds the
-# tcp_cong_avoid_ai export that is not present in this revision's KMI symbol
-# list. Do not force advanced congestion control or BBR into the NetHunter
-# fragment. BBRv3 remains disabled pending a separately validated KMI baseline.
+# Preserve the pinned Creek GKI TCP ABI baseline. Explicitly disable advanced
+# congestion control in the NetHunter fragment so this layer cannot introduce
+# tcp_cong_avoid_ai into the exported symbol table. The upstream ABI/KMI gate
+# remains authoritative; if the stock defconfig still enables this symbol, the
+# build must fail for investigation rather than modifying the symbol list.
 $CFG \
+  -d CONFIG_TCP_CONG_ADVANCED \
+  -d CONFIG_TCP_CONG_BBR \
+  -d CONFIG_TCP_CONG_BBR3 \
   -e CONFIG_NET_SCH_FQ \
   -e CONFIG_NET_SCH_FQ_CODEL \
   -e CONFIG_NET_SCH_CAKE \
