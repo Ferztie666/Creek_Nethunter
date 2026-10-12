@@ -276,7 +276,7 @@ fi
 # that are unresolved in this build's module set. Disable only this optional GSI
 # gadget object; keep standard USB RNDIS/HID/serial gadget functions untouched.
 # This is a compile-time source guard, NOT an ABI/depmod bypass.
-USB_GSI_MAKEFILE="$COMMON/drivers/usb/gadget/function/Makefile"
+USB_GSI_MAKEFILE="$ROOT/common/drivers/usb/gadget/function/Makefile"
 if [ -f "$USB_GSI_MAKEFILE" ]; then
   python3 - "$USB_GSI_MAKEFILE" <<'PY_DISABLE_GSI'
 from pathlib import Path
