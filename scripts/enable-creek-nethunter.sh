@@ -78,8 +78,7 @@ apply_patch_file() {
 for patch in \
   "$PATCH_DIR/gki-ptrace.patch" \
   "$PATCH_DIR/droidspaces-sysvipc-kabi-6-7-8.patch" \
-  "$PATCH_DIR/droidspaces-cgroup-prefix.patch" \
-  "$PATCH_DIR/bbrv3-android13-5.15.patch"; do
+  "$PATCH_DIR/droidspaces-cgroup-prefix.patch"; do
   test -f "$patch"
   apply_patch_file "$COMMON" "$patch"
 done
@@ -140,16 +139,12 @@ $CFG -e CONFIG_BBG \
   --set-str CONFIG_LSM "landlock,lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"
 sed -i '/^[[:space:]]*config[[:space:]]\+LSM$/,/^[[:space:]]*help[[:space:]]*$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' "$COMMON/security/Kconfig"
 
-# BBRv3 and traffic schedulers.
+# Keep the pinned GKI TCP ABI baseline. BBRv3 backport changes TCP core
+# structures and is not enabled until it can pass the authoritative KMI check.
+# Retain stock BBR and the requested traffic schedulers without the BBRv3 patch.
 $CFG \
   -e CONFIG_TCP_CONG_ADVANCED \
   -e CONFIG_TCP_CONG_BBR \
-  -e CONFIG_TCP_CONG_BBR3 \
-  -e CONFIG_DEFAULT_BBR3 \
-  -d CONFIG_DEFAULT_CUBIC \
-  -d CONFIG_DEFAULT_RENO \
-  -d CONFIG_DEFAULT_BBR \
-  --set-str CONFIG_DEFAULT_TCP_CONG bbr3 \
   -e CONFIG_NET_SCH_FQ \
   -e CONFIG_NET_SCH_FQ_CODEL \
   -e CONFIG_NET_SCH_CAKE \
