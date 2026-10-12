@@ -189,7 +189,12 @@ jobs:
             echo "ERROR: ABI/KMI checker bypass detected before build" >&2
             exit 1
           fi
-          if grep -Eq '^CONFIG_(TCP_CONG_BBR3|DEFAULT_BBR3)=y
+          if grep -Eq '^CONFIG_(TCP_CONG_BBR3|DEFAULT_BBR3)=y$' "$KP/common/arch/arm64/configs/nethunter.config"; then
+            echo "ERROR: BBRv3 is not approved for this pinned GKI KMI baseline" >&2
+            grep -nE '^CONFIG_(TCP_CONG_BBR3|DEFAULT_BBR3)=y$' "$KP/common/arch/arm64/configs/nethunter.config" >&2
+            exit 1
+          fi
+          echo "BBRv3=DISABLED_PENDING_KMI_VALIDATION"
 
       - name: Build
         shell: bash
