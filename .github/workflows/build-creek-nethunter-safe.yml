@@ -5,6 +5,9 @@ permissions:
   actions: read
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       jobs:
@@ -202,7 +205,10 @@ jobs:
           set -euo pipefail
           mkdir -p "$OUT_DIR" "$DIST_DIR" "$GITHUB_WORKSPACE/artifacts/logs"
           cd "$KP"
-          if [ "${{ inputs.jobs }}" = "auto" ]; then JOBS=2; else JOBS="${{ inputs.jobs }}"; fi
+          REQUESTED_JOBS="${{ inputs.jobs || 'auto' }}"
+          if [ "$REQUESTED_JOBS" = "auto" ]; then JOBS=2; else JOBS="$REQUESTED_JOBS"; fi
+          case "$JOBS" in ''|*[!0-9]*) echo "ERROR: jobs must be auto or a positive integer" >&2; exit 2 ;; esac
+          if [ "$JOBS" -lt 1 ] || [ "$JOBS" -gt 8 ]; then echo "ERROR: jobs must be between 1 and 8" >&2; exit 2; fi
           export KERNEL_BUILD_JOBS="$JOBS"
           export BUILD_CONFIG VARIANT LTO SKIP_MRPROPER KERNEL_CMDLINE_CONSOLE_AUTO
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
