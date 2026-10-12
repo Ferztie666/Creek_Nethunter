@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="${1:-$(pwd)/kernel_platform}"
 COMMON="$ROOT/common"
+export COMMON
 KERNEL="$ROOT/msm-kernel"
 VENDOR_DTS="$KERNEL/arch/arm64/boot/dts/vendor"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
