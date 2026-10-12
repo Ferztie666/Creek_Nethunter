@@ -130,6 +130,14 @@ for symbol in ("WLAN_VENDOR_REALTEK","WLAN_VENDOR_MEDIATEK","MAC80211_LEDS","MAC
         fragment_symbols.setdefault(symbol, "y")
     else:
         rows.append(("kernel-config:"+symbol,"NO_KCONFIG_SYMBOL","required MSM WLAN feature symbol not found"))
+# These optional networking modules fail modpost against the pinned Creek GKI KMI:
+# nsh needs dev_add_offload/dev_remove_offload/skb_mac_gso_segment; Open vSwitch
+# needs rtnl_delete_link, gretap_fb_dev_create and nf_conncount_* helpers. Those
+# helpers are not exported by the approved mixed-tree KMI. Keep these optional
+# targets disabled until a source/KMI-compatible implementation is verified;
+# do not weaken modpost or the upstream ABI checker.
+for symbol in ("NET_NSH", "OPENVSWITCH", "VXLAN", "GENEVE"):
+    fragment_symbols[symbol] = "n"
 fragment.write_text("# Creek NetHunter adapter requests; merged after stock defconfig checks.\n"+"".join(f"CONFIG_{sym}={value}\n" for sym,value in sorted(fragment_symbols.items())))
 report.write_text("module\tstatus\tdetail\n"+"".join("\t".join(r)+"\n" for r in rows))
 print(f"[adapter-config] requested={len(rows)} report={report} msm_symbols={len(fragment_symbols)} fragment={fragment}")
