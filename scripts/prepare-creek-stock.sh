@@ -285,17 +285,23 @@ from pathlib import Path
 import re, sys
 p = Path(sys.argv[1])
 s = p.read_text()
-active = re.compile(r'^(\s*)obj-\$\(CONFIG_USB_F_GSI\)(\s*\+=\s*usb_f_gsi\.o\s*)$', re.M)
+# Depending on the pinned common revision, usb_f_gsi.o is selected by
+# CONFIG_USB_F_GSI or CONFIG_USB_CONFIGFS_F_GSI. Match either actual Kbuild
+# selector, but require exactly one active rule so layout changes fail closed.
+active = re.compile(r'^(\\s*)obj-\\$\\(CONFIG_(?:USB_F_GSI|USB_CONFIGFS_F_GSI)\\)(\\s*\\+=\\s*usb_f_gsi\\.o\\s*)$', re.M)
 matches = list(active.finditer(s))
 if len(matches) == 1:
-    s = active.sub(r'\1# CREEK_DISABLE_BROKEN_USB_GSI: unresolved rndis_* references; standard RNDIS stays enabled\n# obj-$(CONFIG_USB_F_GSI) += usb_f_gsi.o', s, count=1)
+    original = matches[0].group(0)
+    indent = matches[0].group(1)
+    replacement = indent + "# CREEK_DISABLE_BROKEN_USB_GSI: unresolved rndis_* references; standard RNDIS stays enabled\\n" + indent + "# " + original.lstrip()
+    s = s[:matches[0].start()] + replacement + s[matches[0].end():]
     p.write_text(s)
 elif len(matches) == 0 and 'CREEK_DISABLE_BROKEN_USB_GSI' in s:
     pass
 else:
-    raise SystemExit("ERROR: expected exactly one active USB_F_GSI object rule in " + str(p) + "; found " + str(len(matches)))
-if re.search(r'^\s*obj-\$\(CONFIG_USB_F_GSI\)\s*\+=\s*usb_f_gsi\.o\s*$', p.read_text(), re.M):
-    raise SystemExit("ERROR: USB_F_GSI object rule remains active")
+    raise SystemExit("ERROR: expected exactly one active usb_f_gsi.o object rule (CONFIG_USB_F_GSI or CONFIG_USB_CONFIGFS_F_GSI) in " + str(p) + "; found " + str(len(matches)))
+if re.search(r'^\\s*obj-\\$\\(CONFIG_(?:USB_F_GSI|USB_CONFIGFS_F_GSI)\\)\\s*\\+=\\s*usb_f_gsi\\.o\\s*$', p.read_text(), re.M):
+    raise SystemExit("ERROR: usb_f_gsi.o object rule remains active")
 print("[creek-safety] optional usb_f_gsi.o disabled in " + str(p))
 PY_DISABLE_GSI
 else
