@@ -92,55 +92,120 @@ for gsi_symbol in ("USB_F_GSI", "USB_CONFIGFS_F_GSI"):
     fragment_symbols[gsi_symbol] = "n"
     if gsi_symbol in csyms:
         subprocess.run([str(common/"scripts/config"), "--file", str(nhcfg), "-d", "CONFIG_"+gsi_symbol], check=True)
-for name in sorted(set(names)):
-    sym=aliases.get(name, name.upper())
-    # Candidate aliases for in-tree wireless/driver naming differences.
-    candidates=[sym]
-    if name.startswith("rtw_"): candidates += [name.upper(), "RTW88"]
-    if name.startswith("mt76"): candidates += [name.upper()]
-    found=None; tree=None
-    for candidate in candidates:
-        if candidate in msyms: found=(candidate,msyms[candidate]); tree="msm"; break
-        if candidate in csyms: found=(candidate,csyms[candidate]); tree="common"; break
-    if not found:
-        if name == "rtl8xxxu" or name.startswith("rtw_"):
-            rows.append((name+".ko","EXTERNAL_BUILD_TARGET",
-                         "handled by scripts/creek-external-modules.mk; actual module availability is decided from staged build output"))
-        else:
-            rows.append((name+".ko","NO_KCONFIG_SYMBOL",
-                         "no matching Kconfig symbol in the pinned common/MSM source scan; verify source availability in MODULE-STATUS.txt"))
-        continue
-    symbol, defs=found
-    # Use first definition and its type; bool symbols must be built-in.
-    body="\n".join(defs[0][1])
-    tristate=bool(re.search(r"^\s*tristate\b",body,re.M))
-    typ="-m" if tristate else "-e"
-    if tree=="msm":
-        # Keep the stock MSM defconfig immutable; merge requests after its check.
-        fragment_symbols.setdefault(symbol, "m" if tristate else "y")
-        rows.append((name+".ko","REQUESTED_"+("MODULE" if tristate else "BUILTIN"),f"CONFIG_{symbol} in deferred MSM adapter fragment"))
-    else:
-        config_tool=common/"scripts/config"
-        if not config_tool.exists():
-            rows.append((name+".ko","CONFIG_TOOL_MISSING",str(config_tool))); continue
-        subprocess.run([str(config_tool),"--file",str(nhcfg),typ,"CONFIG_"+symbol],check=True)
-        rows.append((name+".ko","REQUESTED_"+("MODULE" if tristate else "BUILTIN"),f"CONFIG_{symbol} in common NetHunter fragment"))
-for symbol in ("WLAN_VENDOR_REALTEK","WLAN_VENDOR_MEDIATEK","MAC80211_LEDS","MAC80211_RC_MINSTREL"):
+# The target file is an INVENTORY, not proof that every driver can link against
+# Creek's pinned mixed-tree KMI. Previous attempts enabled every discovered
+# symbol in msm-kernel, which built unrelated upstream drivers as vendor modules
+# and caused mass MODPOST unresolved-symbol failures. Only the wireless framework
+# needed by the separately-built USB Wi-Fi adapter path is enabled here.
+safe_msm = {
+    "MAC80211": "m",
+    "MAC80211_LEDS": "n",       # led_trigger_blink is not exported by this GKI KMI
+    "MAC80211_RC_MINSTREL": "y",
+    "WLAN_VENDOR_REALTEK": "y", # does not enable a driver by itself
+}
+if "MAC80211" not in msyms:
+    raise SystemExit("ERROR: pinned MSM source has no MAC80211 Kconfig symbol; cannot enable the audited USB Wi-Fi framework")
+for symbol, value in safe_msm.items():
     if symbol in msyms:
-        fragment_symbols.setdefault(symbol, "y")
+        fragment_symbols[symbol] = value
+    elif symbol == "MAC80211":
+        raise SystemExit("ERROR: MAC80211 is required but absent from msm-kernel Kconfig")
+
+# Explicitly defer optional modules already proven incompatible with this KMI.
+# Keep the stock NFC core untouched; do not build NFC child modules as separate
+# vendor modules while their core exports are absent from the approved KMI.
+blocked_symbols = (
+    "NET_NSH", "OPENVSWITCH", "VXLAN", "GENEVE", "BATMAN_ADV",
+    "NFC_DIGITAL", "NFC_NCI", "NFC_HCI", "NFC_SHDLC", "NFC_LLCP",
+    "NFC_PN533", "NFC_PN533_USB",
+)
+for symbol in blocked_symbols:
+    if symbol in msyms:
+        fragment_symbols[symbol] = "n"
+
+# Do not turn the 139-name request inventory into a 139-module enable list.
+# Record each target's source location and disposition without overriding either
+# tree's Kconfig. Common/GKI options explicitly requested by enable-creek-nethunter.sh
+# remain there; they must not be duplicated in the MSM/vendor .config.
+nh_text = nhcfg.read_text()
+stock_msm_text = msmcfg.read_text()
+
+def config_value(text, symbol):
+    m = re.search(r"^CONFIG_" + re.escape(symbol) + r"=(y|m)$", text, re.M)
+    return m.group(1) if m else ("n" if re.search(r"^# CONFIG_" + re.escape(symbol) + r" is not set$", text, re.M) else None)
+
+external_targets = {"rtl8xxxu"}
+external_nfc = {"nfc_nci", "nfc_llcp", "nfc_digital", "nfc_hci", "nfc_shdlc", "pn533", "pn533_usb"}
+blocked_names = {
+    "nsh", "openvswitch", "vxlan", "geneve", "batman_adv",
+    "nfc_nci", "nfc_llcp", "nfc_digital", "nfc_hci", "nfc_shdlc", "pn533", "pn533_usb",
+}
+for name in sorted(set(names)):
+    symbol = aliases.get(name, name.upper())
+    candidates = [symbol]
+    if name.startswith("rtw_"):
+        candidates += [name.upper(), "RTW88"]
+    if name.startswith("mt76"):
+        candidates += [name.upper()]
+    found = None
+    tree = None
+    for candidate in candidates:
+        if candidate in csyms:
+            found = (candidate, csyms[candidate])
+            tree = "common"
+            break
+        if candidate in msyms:
+            found = (candidate, msyms[candidate])
+            tree = "msm"
+            break
+    if not found:
+        if name in external_targets or name.startswith("rtw_"):
+            rows.append((name + ".ko", "EXTERNAL_BUILD_TARGET",
+                         "built only by the separately audited external-module stage; package status comes from actual staged output"))
+        else:
+            rows.append((name + ".ko", "NO_KCONFIG_SYMBOL",
+                         "no matching Kconfig symbol in pinned common/MSM scan; no placeholder or invented module is created"))
+        continue
+
+    symbol, defs = found
+    if name == "mac80211":
+        rows.append((name + ".ko", "ENABLED_MSM_BASELINE",
+                     "CONFIG_MAC80211=m; MAC80211_LEDS=n to avoid the known missing led_trigger_blink export"))
+        continue
+    if name in external_targets:
+        rows.append((name + ".ko", "EXTERNAL_BUILD_TARGET",
+                     "built from the repository's rtl/ source only; in-tree duplicate is not auto-enabled"))
+        continue
+    if name in blocked_names:
+        rows.append((name + ".ko", "DEFERRED_KMI_AUDIT",
+                     "known unresolved or non-KMI dependency; not enabled in the MSM/vendor module fragment"))
+        continue
+
+    # Preserve the existing GKI fragment and stock MSM defconfig as the sources
+    # of truth. Never activate an extra driver merely because a matching Kconfig
+    # symbol happens to exist in one or both source trees.
+    common_value = config_value(nh_text, symbol)
+    msm_value = config_value(stock_msm_text, symbol)
+    if common_value in ("y", "m"):
+        rows.append((name + ".ko", "REQUESTED_IN_GKI_FRAGMENT",
+                     f"CONFIG_{symbol}={common_value} is already requested in common/nethunter.config; do not duplicate it in MSM"))
+    elif msm_value in ("y", "m"):
+        rows.append((name + ".ko", "PRESERVED_STOCK_MSM_CONFIG",
+                     f"CONFIG_{symbol}={msm_value} already comes from stock msm-kernel/gki_defconfig"))
+    elif name.startswith("nfc") or name.startswith("pn533"):
+        rows.append((name + ".ko", "DEFERRED_KMI_AUDIT",
+                     "NFC child module would depend on core NFC exports not approved for this vendor KMI"))
     else:
-        rows.append(("kernel-config:"+symbol,"NO_KCONFIG_SYMBOL","required MSM WLAN feature symbol not found"))
-# These optional networking modules fail modpost against the pinned Creek GKI KMI:
-# nsh needs dev_add_offload/dev_remove_offload/skb_mac_gso_segment; Open vSwitch
-# needs rtnl_delete_link, gretap_fb_dev_create and nf_conncount_* helpers. Those
-# helpers are not exported by the approved mixed-tree KMI. Keep these optional
-# targets disabled until a source/KMI-compatible implementation is verified;
-# do not weaken modpost or the upstream ABI checker.
-# batman-adv also imports bridge/IPv6 multicast helpers that are not exported by this pinned Creek GKI KMI.
-# Keep this optional mesh networking module disabled rather than relaxing modpost/KMI.
-for symbol in ("NET_NSH", "OPENVSWITCH", "VXLAN", "GENEVE", "BATMAN_ADV"):
-    fragment_symbols[symbol] = "n"
-fragment.write_text("# Creek NetHunter adapter requests; merged after stock defconfig checks.\n"+"".join(f"CONFIG_{sym}={value}\n" for sym,value in sorted(fragment_symbols.items())))
+        rows.append((name + ".ko", "DEFERRED_KMI_AUDIT",
+                     f"CONFIG_{symbol} exists in {tree}, but is not in the verified enable allowlist; no automatic activation"))
+
+# Preserve known-failing families as disabled even if a future vendor defconfig
+# starts selecting them by default. Never relax MODPOST or ABI/KMI enforcement.
+for symbol in blocked_symbols:
+    if symbol in msyms:
+        fragment_symbols[symbol] = "n"
+fragment.write_text("# Creek NetHunter adapter requests; only audited MSM baseline enabled.\n" +
+                    "".join(f"CONFIG_{sym}={value}\n" for sym, value in sorted(fragment_symbols.items())))
 report.write_text("module\tstatus\tdetail\n"+"".join("\t".join(r)+"\n" for r in rows))
 print(f"[adapter-config] requested={len(rows)} report={report} msm_symbols={len(fragment_symbols)} fragment={fragment}")
 for row in rows:
