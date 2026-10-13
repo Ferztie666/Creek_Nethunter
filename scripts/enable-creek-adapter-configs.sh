@@ -135,6 +135,7 @@ def config_value(text, symbol):
     return m.group(1) if m else ("n" if re.search(r"^# CONFIG_" + re.escape(symbol) + r" is not set$", text, re.M) else None)
 
 external_targets = {"rtl8xxxu"}
+external_nfc = {"nfc_nci", "nfc_llcp", "nfc_digital", "nfc_hci", "nfc_shdlc", "pn533", "pn533_usb"}
 blocked_names = {
     "nsh", "openvswitch", "vxlan", "geneve", "batman_adv",
     "nfc_nci", "nfc_llcp", "nfc_digital", "nfc_hci", "nfc_shdlc", "pn533", "pn533_usb",
@@ -248,41 +249,15 @@ creek_nethunter_apply_adapter_config() {
   read -r -a adapter_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a adapter_make_args <<< "${MAKE_ARGS:-}"
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
-
-  # Verify resolved config after Kconfig dependency processing. A fragment alone
-  # is not proof that a symbol stayed disabled after olddefconfig.
-  if ! grep -Eq '^CONFIG_MAC80211=m
-    echo "ERROR: broken GSI gadget remains enabled after config merge" >&2
-    grep -E "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=" "${config_file}" >&2 || true
-    return 1
-  fi
-  echo "[creek-nethunter] adapter fragment merged; broken GSI gadget disabled"
-}
-POST_DEFCONFIG_CMDS="__POST_COMMANDS__"
-"""
-s=s.replace("__POST_COMMANDS__", post)
-p.write_text(s)
-PY_BUILD_CONFIG
- "${config_file}"; then
+  # Verify resolved config after Kconfig dependency processing, not just the fragment.
+  if ! grep -Eq "^CONFIG_MAC80211=m$" "${config_file}"; then
     echo "ERROR: audited USB-WLAN baseline CONFIG_MAC80211=m did not survive olddefconfig" >&2
-    grep -E '^CONFIG_(MAC80211|CFG80211|MAC80211_LEDS|MAC80211_RC_MINSTREL)=' "${config_file}" >&2 || true
+    grep -E "^CONFIG_(MAC80211|CFG80211|MAC80211_LEDS|MAC80211_RC_MINSTREL)=" "${config_file}" >&2 || true
     return 1
   fi
-  if grep -Eq '^CONFIG_MAC80211_LEDS=(y|m)
-    echo "ERROR: broken GSI gadget remains enabled after config merge" >&2
-    grep -E "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=" "${config_file}" >&2 || true
-    return 1
-  fi
-  echo "[creek-nethunter] adapter fragment merged; broken GSI gadget disabled"
-}
-POST_DEFCONFIG_CMDS="__POST_COMMANDS__"
-"""
-s=s.replace("__POST_COMMANDS__", post)
-p.write_text(s)
-PY_BUILD_CONFIG
- "${config_file}"; then
+  if grep -Eq "^CONFIG_MAC80211_LEDS=(y|m)$" "${config_file}"; then
     echo "ERROR: CONFIG_MAC80211_LEDS is enabled but led_trigger_blink is not exported by the pinned KMI" >&2
-    grep -n '^CONFIG_MAC80211_LEDS=' "${config_file}" >&2 || true
+    grep -n "^CONFIG_MAC80211_LEDS=" "${config_file}" >&2 || true
     return 1
   fi
   for symbol in NET_NSH OPENVSWITCH VXLAN GENEVE BATMAN_ADV NFC_DIGITAL NFC_NCI NFC_HCI NFC_SHDLC NFC_LLCP NFC_PN533 NFC_PN533_USB; do
@@ -292,8 +267,7 @@ PY_BUILD_CONFIG
       return 1
     fi
   done
-  echo "[creek-nethunter] post-defconfig KMI-risk audit passed: MAC80211=m, MAC80211_LEDS and known failing networking/NFC child modules disabled"
-
+  echo "[creek-nethunter] post-defconfig KMI-risk audit passed: MAC80211=m, LED hook and known failing networking/NFC child modules disabled"
   if grep -Eq "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=(y|m)$" "${config_file}"; then
     echo "ERROR: broken GSI gadget remains enabled after config merge" >&2
     grep -E "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=" "${config_file}" >&2 || true
