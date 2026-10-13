@@ -37,7 +37,7 @@ jobs:
       BUILD_CONFIG: msm-kernel/build.config.msm.creek
       VARIANT: gki
       LTO: thin
-      SKIP_MRPROPER: ${{ inputs.clean == false && '1' || '0' }}
+      SKIP_MRPROPER: ${{ github.event_name == 'workflow_dispatch' && inputs.clean == false && '1' || '0' }}
       KERNEL_CMDLINE_CONSOLE_AUTO: "0"
       EXT_MODULES_MAKEFILE: ${{ github.workspace }}/scripts/creek-external-modules.mk
       CREEK_DIST_DIR: ${{ github.workspace }}/out/dist
