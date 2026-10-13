@@ -298,6 +298,18 @@ merge_nethunter_config() {
   read -r -a nh_make_args <<< "${MAKE_ARGS:-}"
   (cd "${KERNEL_DIR}" && make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" olddefconfig)
 
+  # Validate the FINAL resolved GKI .config, not only nethunter.config. The
+  # previous tcp_cong_avoid_ai KMI failure demonstrates why fragment-only checks
+  # are insufficient: defaults/dependencies can re-enable ABI-sensitive options.
+  for symbol in TCP_CONG_ADVANCED TCP_CONG_BBR TCP_CONG_BBR3 DEFAULT_BBR3; do
+    if grep -Eq "^CONFIG_${symbol}=(y|m)$" "${config_file}"; then
+      echo "ERROR: CONFIG_${symbol} is enabled in final GKI .config and may change the pinned Creek KMI export set" >&2
+      grep -n "^CONFIG_${symbol}=" "${config_file}" >&2 || true
+      return 1
+    fi
+  done
+  echo "[nethunter] final GKI KMI-sensitive TCP options verified disabled"
+
   # An absent symbol is not enabled. Fail only if common/GKI explicitly
   # resolves it to y or m; absence can mean it belongs to the MSM Kconfig tree.
   if grep -Eq '^CONFIG_USB_F_GSI=(y|m)$' "${config_file}"; then
