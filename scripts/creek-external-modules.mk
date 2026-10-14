@@ -46,8 +46,16 @@ WLAN_QCACLD_KCFLAGS := KCFLAGS=-Wno-macro-redefined\ -DCFG80211_SINGLE_NETDEV_MU
 .PHONY: all wlan-platform wlan-qcacld display camera audio rtw88 rtl8xxxu external-dt
 # Every external module re-enters the same msm-kernel O= directory. Parallel
 # recursive Kbuild invocations race while generating shared kernel files.
+#
+# SAFETY QUARANTINE: the external lwfinger/rtw88 HEAD used in previous runs
+# references skb_copy_header from rtw_sdio.ko, but that symbol is unavailable
+# to modules in this pinned Creek GKI KMI. MODPOST correctly fails. Do not
+# weaken MODPOST/export checks or auto-clone/build this driver in the stable
+# default target. Keep the explicit rtw88 target below for a future audited
+# source port; it is not part of the default release build until that port
+# passes MODPOST and the normal ABI/KMI gates.
 .NOTPARALLEL: all wlan-platform wlan-qcacld display camera audio rtw88 rtl8xxxu external-dt
-all: wlan-platform wlan-qcacld display camera audio rtw88 rtl8xxxu external-dt
+all: wlan-platform wlan-qcacld display camera audio rtl8xxxu external-dt
 
 wlan-qcacld: wlan-platform
 
