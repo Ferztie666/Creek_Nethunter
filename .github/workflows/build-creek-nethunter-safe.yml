@@ -100,6 +100,13 @@ jobs:
           set -euo pipefail
           for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh; do bash -n "$f"; done
           for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
+          # Keep the known-incompatible third-party rtw88 fork out of the
+          # default module stage. Its MODPOST failure (undefined skb_copy_header)
+          # must not be bypassed or silently ignored.
+          if grep -Eq '^all:.*rtw88([[:space:]]|$)' scripts/creek-external-modules.mk; then
+            echo "ERROR: incompatible rtw88 must remain quarantined from default build until source/KMI audit passes" >&2
+            exit 1
+          fi
           bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
 
       - name: Prepare Creek source layout and preserve ABI checker
