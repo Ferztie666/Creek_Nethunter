@@ -1,12 +1,54 @@
 diff --git a/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c b/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
 --- a/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
 +++ b/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c
-@@ -102,7 +102,7 @@
+@@ -101,17 +101,24 @@
  int hdd_enable_monitor_mode(struct net_device *dev)
  {
- 	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
+-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 -	uint8_t vdev_id;
++	void *soc;
 +	int vdev_id;
  	int ret;
  #ifdef FEATURE_FRAME_INJECTION_SUPPORT
- 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+-	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
++	struct hdd_adapter *adapter;
+ #endif
+ 
++	if (!dev)
++		return -EINVAL;
++
++	soc = cds_get_context(QDF_MODULE_ID_SOC);
++	if (!soc)
++		return -EINVAL;
++
++#ifdef FEATURE_FRAME_INJECTION_SUPPORT
++	adapter = WLAN_HDD_GET_PRIV_PTR(dev);
++#endif
+ 	hdd_enter_dev(dev);
+ 
+ 	vdev_id = cdp_get_mon_vdev_from_pdev(soc, OL_TXRX_PDEV_ID);
+@@ -139,14 +146,22 @@
+ int hdd_disable_monitor_mode(struct net_device *dev)
+ {
+-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
++	void *soc;
+ 	int vdev_id;
+ 	int ret;
+ #ifdef FEATURE_FRAME_INJECTION_SUPPORT
+-	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
++	struct hdd_adapter *adapter;
+ #endif
+ 
++	if (!dev)
++		return -EINVAL;
++
++	soc = cds_get_context(QDF_MODULE_ID_SOC);
++	if (!soc)
++		return -EINVAL;
++
++#ifdef FEATURE_FRAME_INJECTION_SUPPORT
++	adapter = WLAN_HDD_GET_PRIV_PTR(dev);
++#endif
+ 	hdd_enter_dev(dev);
+ 
+ 	vdev_id = cdp_get_mon_vdev_from_pdev(soc, OL_TXRX_PDEV_ID);
