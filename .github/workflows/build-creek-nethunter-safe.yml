@@ -241,13 +241,13 @@ jobs:
             [ -s "$cfg" ] || continue
             echo "CONFIG_FILE=$cfg" | tee -a "$REPORT"
             for symbol in $symbols; do
-              value="$(sed -n "s/^CONFIG_\${symbol}=//p" "$cfg" | head -n1)"
+              value="$(sed -n "s/^CONFIG_${symbol}=//p" "$cfg" | head -n1)"
               if [ -n "$value" ]; then
-                echo "CONFIG_\${symbol}=$value" | tee -a "$REPORT"
-              elif grep -qx "# CONFIG_\${symbol} is not set" "$cfg"; then
-                echo "CONFIG_\${symbol}=n" | tee -a "$REPORT"
+                echo "CONFIG_${symbol}=$value" | tee -a "$REPORT"
+              elif grep -qx "# CONFIG_${symbol} is not set" "$cfg"; then
+                echo "CONFIG_${symbol}=n" | tee -a "$REPORT"
               else
-                echo "CONFIG_\${symbol}=ABSENT_OR_UNSUPPORTED" | tee -a "$REPORT"
+                echo "CONFIG_${symbol}=ABSENT_OR_UNSUPPORTED" | tee -a "$REPORT"
               fi
             done
           done < <(find "$OUT_DIR" -type f -name .config -print | sort)
