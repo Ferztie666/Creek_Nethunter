@@ -230,6 +230,43 @@ $CFG \
   -e CONFIG_IP_SET_HASH_NETIFACE \
   -e CONFIG_IP_SET_LIST_SET
 
+# Requested Creek NetHunter built-in capabilities.
+# olddefconfig resolves dependencies; final values are audited in the workflow.
+# Unsupported symbols are reported, never fabricated as .ko files.
+$CFG \
+  -e CONFIG_CFG80211_INTERNAL_REGDB \
+  -d CONFIG_CFG80211_CRDA_SUPPORT \
+  -e CONFIG_MAC80211_MESH \
+  -e CONFIG_NFC \
+  -e CONFIG_NFC_NCI \
+  -e CONFIG_NFC_LLCP \
+  -e CONFIG_NFC_DIGITAL \
+  -e CONFIG_NFC_HCI \
+  -e CONFIG_MEDIA_SUPPORT \
+  -e CONFIG_MEDIA_SDR_SUPPORT \
+  -e CONFIG_LIRC \
+  -e CONFIG_RC_CORE \
+  -e CONFIG_IR_LIRC_CODEC \
+  -e CONFIG_USB_SERIAL_CP210X \
+  -e CONFIG_W1 \
+  -e CONFIG_W1_MASTER_DS2490 \
+  -e CONFIG_W1_SLAVE_THERM \
+  -e CONFIG_W1_SLAVE_DS2431 \
+  -e CONFIG_W1_SLAVE_DS2433 \
+  -e CONFIG_W1_SLAVE_DS2408 \
+  -e CONFIG_BFQ_GROUP_IOSCHED \
+  -e CONFIG_LZ4_COMPRESS \
+  -d CONFIG_PANIC_ON_OOPS \
+  --set-val CONFIG_PANIC_TIMEOUT 5 \
+  -e CONFIG_LOCKUP_DETECTOR \
+  -e CONFIG_SOFTLOCKUP_DETECTOR \
+  -e CONFIG_HARDLOCKUP_DETECTOR \
+  -e CONFIG_WQ_WATCHDOG \
+  -e CONFIG_THERMAL_GOV_POWER_ALLOCATOR \
+  -e CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
+  -e CONFIG_BT_HS \
+  -e CONFIG_BT_6LOWPAN
+
 # NFS client + server. Keep Kerberos disabled for simple sec=sys Android use.
 $CFG \
   -e CONFIG_NETWORK_FILESYSTEMS \

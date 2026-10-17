@@ -66,7 +66,6 @@ disable_old = """int hdd_disable_monitor_mode(struct net_device *dev)
 disable_new = """int hdd_disable_monitor_mode(struct net_device *dev)
 {
 \tvoid *soc;
-\tint vdev_id;
 \tint ret;
 #ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tstruct hdd_adapter *adapter;
@@ -96,6 +95,24 @@ def replace_exact(text, old, new, label):
 s = replace_exact(s, enable_old, enable_new, "enable_monitor_mode")
 s = replace_exact(s, disable_old, disable_new, "disable_monitor_mode")
 
+# Recovery fix: always attempt the PDEV reset on disable. The old early return
+# on an unresolved monitor vdev skipped cdp_reset_monitor_mode() and could leave
+# wlan0 stuck after a failed monitor transition.
+old_disable_lookup = """\tvdev_id = cdp_get_mon_vdev_from_pdev(soc, OL_TXRX_PDEV_ID);
+\tif (vdev_id < 0)
+\t\treturn -EINVAL;
+
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT"""
+new_disable_lookup = """\t/* Always attempt PDEV monitor reset even if no monitor vdev resolves. */
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT"""
+count = s.count(old_disable_lookup)
+if count == 1:
+    s = s.replace(old_disable_lookup, new_disable_lookup, 1)
+elif count == 0 and s.count(new_disable_lookup) == 1:
+    pass
+else:
+    raise SystemExit(f"ERROR: disable monitor recovery block ambiguous; old_count={count}, new_count={s.count(new_disable_lookup)}")
+
 if s != original:
     p.write_text(s)
 
@@ -111,6 +128,10 @@ def function_body(text, start, end=None):
 
 enable = function_body(s, "int hdd_enable_monitor_mode(", "int hdd_disable_monitor_mode(")
 disable = function_body(s, "int hdd_disable_monitor_mode(")
+if "cdp_reset_monitor_mode(soc, OL_TXRX_PDEV_ID, false)" not in disable:
+    raise SystemExit("ERROR: disable monitor recovery path no longer attempts PDEV reset")
+if "cdp_get_mon_vdev_from_pdev" in disable or "vdev_id < 0" in disable:
+    raise SystemExit("ERROR: disable monitor path still has an early return before PDEV reset")
 for label, body in (("enable", enable), ("disable", disable)):
     for required in ("if (!dev)", "if (!soc)", "int vdev_id;"):
         if required not in body:
@@ -120,5 +141,6 @@ for label, body in (("enable", enable), ("disable", disable)):
 
 print("QCACLD_MONITOR_NULL_GUARDS=PASS")
 print("QCACLD_MONITOR_VDEV_ID_SIGNEDNESS=PASS")
+print("QCACLD_MONITOR_DISABLE_PDEV_RESET=PASS")
 print("NOTE: source-level checks do not replace physical monitor-mode/recovery testing")
 PY

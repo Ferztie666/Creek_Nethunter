@@ -91,8 +91,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/logs"
           bash -n scripts/patch-creek-qcacld-monitor.sh
-          bash scripts/patch-creek-qcacld-monitor.sh "$KP" "$GITHUB_WORKSPACE"
+          bash scripts/patch-creek-qcacld-monitor.sh "$KP" "$GITHUB_WORKSPACE" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/monitor-patch-status.txt"
 
       - name: Source safety audit
         shell: bash
@@ -139,22 +140,10 @@ jobs:
           # deliberately excluded from this baseline because it changes LSM policy
           # and is not required for NetHunter hardware support.
           cp scripts/enable-creek-nethunter.sh "$RUNNER_TEMP/enable-creek-nethunter.sh"
-          python3 - "$RUNNER_TEMP/enable-creek-nethunter.sh" <<'PY'
-          from pathlib import Path
-          import sys
-          p=Path(sys.argv[1])
-          s=p.read_text()
-          # Remove the optional BBG setup and config mutation from this CI build copy.
-          a=s.find('# Baseband Guard (BBG):')
-          b=s.find('COMMON_DEFCONFIG=', a)
-          if a >= 0 and b > a:
-              s=s[:a]+s[b:]
-          a=s.find('# Baseband Guard LSM.')
-          b=s.find('# BBRv3 and traffic schedulers.', a)
-          if a >= 0 and b > a:
-              s=s[:a]+s[b:]
-          p.write_text(s)
-          PY
+          # BBG remains excluded from this build copy until its source revision is
+          # pinned and audited for this Android 13/5.15 GKI. Current upstream BBG
+          # main targets Android 17 / Linux 6.18; do not silently import it.
+          # BBRv3 remains disabled because the pinned KMI rejects tcp_cong_avoid_ai.
           mkdir -p "$GITHUB_WORKSPACE/artifacts/logs"
           # Do not hide the first failing command. Keep the build strict, but
           # expose the exact NetHunter patch/config operation that failed.
@@ -233,6 +222,37 @@ jobs:
             exit 1
           fi
           echo "ABI/KMI_CHECKER=ACTIVE_AFTER_BUILD"
+
+      - name: Requested feature configuration audit
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/logs"
+          REPORT="$GITHUB_WORKSPACE/artifacts/logs/requested-feature-config-status.txt"
+          : > "$REPORT"
+          echo "Creek NetHunter requested feature configuration audit" | tee -a "$REPORT"
+          echo "CONFIG_SOURCE_FAMILY=5.15.167-android13-8" | tee -a "$REPORT"
+          echo "CURRENT_STOCK_FAMILY=5.15.194-android13-8-00019-gf4321180a397-ab15212794" | tee -a "$REPORT"
+          echo "FLASH_ALLOWED=NO" | tee -a "$REPORT"
+          echo "Absent options are not assumed enabled." | tee -a "$REPORT"
+          symbols='CFG80211_INTERNAL_REGDB CFG80211_CRDA_SUPPORT MAC80211_MESH NFC NFC_NCI NFC_LLCP NFC_DIGITAL NFC_HCI MEDIA_SUPPORT MEDIA_SDR_SUPPORT LIRC RC_CORE IR_LIRC_CODEC USB_SERIAL_CP210X W1 W1_MASTER_DS2490 W1_SLAVE_THERM W1_SLAVE_DS2431 W1_SLAVE_DS2433 W1_SLAVE_DS2408 BFQ_GROUP_IOSCHED LZ4_COMPRESS PANIC_ON_OOPS PANIC_TIMEOUT LOCKUP_DETECTOR SOFTLOCKUP_DETECTOR HARDLOCKUP_DETECTOR WQ_WATCHDOG THERMAL_GOV_POWER_ALLOCATOR CPU_FREQ_GOV_SCHEDUTIL BT_HS BT_6LOWPAN'
+          while IFS= read -r cfg; do
+            [ -s "$cfg" ] || continue
+            echo "CONFIG_FILE=$cfg" | tee -a "$REPORT"
+            for symbol in $symbols; do
+              value="$(sed -n "s/^CONFIG_\${symbol}=//p" "$cfg" | head -n1)"
+              if [ -n "$value" ]; then
+                echo "CONFIG_\${symbol}=$value" | tee -a "$REPORT"
+              elif grep -qx "# CONFIG_\${symbol} is not set" "$cfg"; then
+                echo "CONFIG_\${symbol}=n" | tee -a "$REPORT"
+              else
+                echo "CONFIG_\${symbol}=ABSENT_OR_UNSUPPORTED" | tee -a "$REPORT"
+              fi
+            done
+          done < <(find "$OUT_DIR" -type f -name .config -print | sort)
+          test -s "$REPORT"
+          echo "FEATURE_CONFIG_AUDIT=PASS_REPORT_ONLY_NOT_FLASH_AUTHORIZATION" | tee -a "$REPORT"
 
       - name: Final safety verification
         if: success()
