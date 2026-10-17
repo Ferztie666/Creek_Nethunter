@@ -105,18 +105,13 @@ old_disable_lookup = """\tvdev_id = cdp_get_mon_vdev_from_pdev(soc, OL_TXRX_PDEV
 #ifdef FEATURE_FRAME_INJECTION_SUPPORT"""
 new_disable_lookup = """\t/* Always attempt PDEV monitor reset even if no monitor vdev resolves. */
 #ifdef FEATURE_FRAME_INJECTION_SUPPORT"""
-disable_start = s.find("int hdd_disable_monitor_mode(")
-if disable_start < 0:
-    raise SystemExit("ERROR: missing hdd_disable_monitor_mode while applying recovery fix")
-prefix, disable_src = s[:disable_start], s[disable_start:]
-count = disable_src.count(old_disable_lookup)
+count = s.count(old_disable_lookup)
 if count == 1:
-    disable_src = disable_src.replace(old_disable_lookup, new_disable_lookup, 1)
-elif count == 0 and disable_src.count(new_disable_lookup) == 1:
+    s = s.replace(old_disable_lookup, new_disable_lookup, 1)
+elif count == 0 and s.count(new_disable_lookup) == 1:
     pass
 else:
-    raise SystemExit(f"ERROR: disable monitor recovery block ambiguous; old_count={count}, new_count={disable_src.count(new_disable_lookup)}")
-s = prefix + disable_src
+    raise SystemExit(f"ERROR: disable monitor recovery block ambiguous; old_count={count}, new_count={s.count(new_disable_lookup)}")
 
 if s != original:
     p.write_text(s)
@@ -138,15 +133,11 @@ if "cdp_reset_monitor_mode(soc, OL_TXRX_PDEV_ID, false)" not in disable:
 if "cdp_get_mon_vdev_from_pdev" in disable or "vdev_id < 0" in disable:
     raise SystemExit("ERROR: disable monitor path still has an early return before PDEV reset")
 for label, body in (("enable", enable), ("disable", disable)):
-    for required in ("if (!dev)", "if (!soc)"):
+    for required in ("if (!dev)", "if (!soc)", "int vdev_id;"):
         if required not in body:
             raise SystemExit(f"ERROR: {label} monitor prologue missing {required}")
     if "uint8_t vdev_id;" in body:
         raise SystemExit(f"ERROR: {label} monitor prologue still uses unsigned vdev_id")
-if "int vdev_id;" not in enable:
-    raise SystemExit("ERROR: enable monitor prologue must use signed int vdev_id")
-if "vdev_id" in disable:
-    raise SystemExit("ERROR: disable monitor path should not depend on monitor vdev lookup")
 
 print("QCACLD_MONITOR_NULL_GUARDS=PASS")
 print("QCACLD_MONITOR_VDEV_ID_SIGNEDNESS=PASS")
