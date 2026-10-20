@@ -241,24 +241,23 @@ jobs:
           echo "FLASH_ALLOWED=NO" | tee -a "$REPORT"
           echo "Absent options are not assumed enabled." | tee -a "$REPORT"
           symbols='CFG80211_INTERNAL_REGDB CFG80211_CRDA_SUPPORT MAC80211_MESH NFC NFC_NCI NFC_LLCP NFC_DIGITAL NFC_HCI MEDIA_SUPPORT MEDIA_SDR_SUPPORT LIRC RC_CORE IR_LIRC_CODEC USB_SERIAL_CP210X W1 W1_MASTER_DS2490 W1_SLAVE_THERM W1_SLAVE_DS2431 W1_SLAVE_DS2433 W1_SLAVE_DS2408 BFQ_GROUP_IOSCHED LZ4_COMPRESS PANIC_ON_OOPS PANIC_TIMEOUT LOCKUP_DETECTOR SOFTLOCKUP_DETECTOR HARDLOCKUP_DETECTOR WQ_WATCHDOG THERMAL_GOV_POWER_ALLOCATOR CPU_FREQ_GOV_SCHEDUTIL BT_HS BT_6LOWPAN'
-          CONFIG_COUNT=0
-          while IFS= read -r cfg; do
-            [ -s "$cfg" ] || continue
-            CONFIG_COUNT=$((CONFIG_COUNT + 1))
-            echo "CONFIG_FILE=$cfg" | tee -a "$REPORT"
-            for symbol in $symbols; do
-              value="$(sed -n "s/^CONFIG_${symbol}=//p" "$cfg" | head -n1)"
-              if [ -n "$value" ]; then
-                echo "CONFIG_${symbol}=$value" | tee -a "$REPORT"
-              elif grep -qx "# CONFIG_${symbol} is not set" "$cfg"; then
-                echo "CONFIG_${symbol}=n" | tee -a "$REPORT"
-              else
-                echo "CONFIG_${symbol}=ABSENT_OR_UNSUPPORTED" | tee -a "$REPORT"
-              fi
-            done
-          done < <(find "$OUT_DIR" -type f -name .config -print | sort)
-          [ "$CONFIG_COUNT" -gt 0 ] || { echo "ERROR: no generated .config found under OUT_DIR=$OUT_DIR" | tee -a "$REPORT" >&2; exit 1; }
-          test -s "$REPORT"
+          # Audit only the final GKI config that is packaged with the kernel.
+          # OUT_DIR can contain intermediate configs from multiple build stages;
+          # merging all of them produced duplicate/conflicting status lines.
+          cfg="$DIST_DIR/.config"
+          [ -s "$cfg" ] || { echo "ERROR: final generated config missing: $cfg" | tee -a "$REPORT" >&2; exit 1; }
+          echo "CONFIG_FILE=$cfg" | tee -a "$REPORT"
+          for symbol in $symbols; do
+            value="$(sed -n "s/^CONFIG_${symbol}=//p" "$cfg" | head -n1)"
+            if [ -n "$value" ]; then
+              echo "CONFIG_${symbol}=$value" | tee -a "$REPORT"
+            elif grep -qx "# CONFIG_${symbol} is not set" "$cfg"; then
+              echo "CONFIG_${symbol}=n" | tee -a "$REPORT"
+            else
+              echo "CONFIG_${symbol}=ABSENT_OR_UNSUPPORTED" | tee -a "$REPORT"
+            fi
+          done
+          echo "PANIC_POLICY=UPSTREAM_FINAL_CONFIG; no forced panic-on-oops override" | tee -a "$REPORT"
           echo "FEATURE_CONFIG_AUDIT=PASS_REPORT_ONLY_NOT_FLASH_AUTHORIZATION" | tee -a "$REPORT"
 
       - name: Final safety verification

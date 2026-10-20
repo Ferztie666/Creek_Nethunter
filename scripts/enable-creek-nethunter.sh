@@ -230,6 +230,10 @@ $CFG \
   -e CONFIG_IP_SET_HASH_NETIFACE \
   -e CONFIG_IP_SET_LIST_SET
 
+# Preserve the pinned GKI panic policy. CONFIG_PANIC_ON_OOPS and CONFIG_PANIC_TIMEOUT
+# are intentionally not overridden: disabling panic-on-oops is not a recovery fix and
+# can let a corrupted kernel continue running after a fatal driver bug.
+
 # Requested Creek NetHunter built-in capabilities.
 # olddefconfig resolves dependencies; final values are audited in the workflow.
 # Unsupported symbols are reported, never fabricated as .ko files.
@@ -256,8 +260,6 @@ $CFG \
   -e CONFIG_W1_SLAVE_DS2408 \
   -e CONFIG_BFQ_GROUP_IOSCHED \
   -e CONFIG_LZ4_COMPRESS \
-  -d CONFIG_PANIC_ON_OOPS \
-  --set-val CONFIG_PANIC_TIMEOUT 5 \
   -e CONFIG_LOCKUP_DETECTOR \
   -e CONFIG_SOFTLOCKUP_DETECTOR \
   -e CONFIG_HARDLOCKUP_DETECTOR \
