@@ -136,13 +136,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # The stock enable script is used only after an audit. Baseband Guard is
-          # deliberately excluded from this baseline because it changes LSM policy
-          # and is not required for NetHunter hardware support.
+          # BBG is part of the requested security configuration and is currently
+          # integrated by enable-creek-nethunter.sh. Its upstream revision is not
+          # pinned yet; record the exact checked-out SHA and keep flash authorization
+          # blocked until that revision is audited for this Android 13/5.15 GKI.
           cp scripts/enable-creek-nethunter.sh "$RUNNER_TEMP/enable-creek-nethunter.sh"
-          # BBG remains excluded from this build copy until its source revision is
-          # pinned and audited for this Android 13/5.15 GKI. Current upstream BBG
-          # main targets Android 17 / Linux 6.18; do not silently import it.
           # BBRv3 remains disabled because the pinned KMI rejects tcp_cong_avoid_ai.
           mkdir -p "$GITHUB_WORKSPACE/artifacts/logs"
           # Do not hide the first failing command. Keep the build strict, but
@@ -157,7 +155,13 @@ jobs:
             tail -n 160 "$GITHUB_WORKSPACE/artifacts/logs/nethunter-config.log" || true
             exit "$rc"
           fi
-          ! grep -qs 'CONFIG_BBG' "$KP/common/arch/arm64/configs/nethunter.config"
+          BBG_DIR="$KP/common/Baseband-guard"
+          test -d "$BBG_DIR/.git" || { echo "ERROR: BBG setup reported success but source checkout is missing" >&2; exit 1; }
+          {
+            echo "BBG_SOURCE_COMMIT=$(git -C "$BBG_DIR" rev-parse HEAD)"
+            echo "BBG_SOURCE_PINNED=NO"
+            echo "BBG_STATUS=BUILT_FROM_UPSTREAM_REF_BY_SETUP_SCRIPT_FLASH_BLOCKED"
+          } | tee "$GITHUB_WORKSPACE/artifacts/logs/baseband-guard-source.txt"
           bash -n scripts/enable-creek-adapter-configs.sh
           bash scripts/enable-creek-adapter-configs.sh "$KP" "$GITHUB_WORKSPACE/artifacts/logs/adapter-config-status.txt"
 
@@ -339,7 +343,7 @@ jobs:
           (cd artifacts/ak3 && zip -qr9 "$GITHUB_WORKSPACE/Creek-Nethunter-gki-AK3-candidate.zip" .)
           unzip -tq Creek-Nethunter-gki-AK3-candidate.zip
 
-          printf '%s\n'             'Creek NetHunter GKI build candidate (upstream ABI/KMI gate required)'             'Kernel family: 5.15.167-android13-8'             'ABI checker: active; bypass markers are fatal'             'KernelSU kernel integration: NOT VERIFIED; do not assume root survives this image'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: excluded from stable baseline'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'Build-time ABI/KMI check must pass without bypass; device-side proprietary-module compatibility is still unverified.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
+          printf '%s\n'             'Creek NetHunter GKI build candidate (upstream ABI/KMI gate required)'             'Kernel family: 5.15.167-android13-8'             'ABI checker: active; bypass markers are fatal'             'KernelSU kernel integration: NOT VERIFIED; do not assume root survives this image'             'Runtime WLAN unload/forced con_mode: disabled'             'Baseband Guard: enabled, source SHA recorded; upstream revision not yet pinned'             'Generated vendor_boot.img is intentionally NOT packaged.'             'Current Android 16 stock vendor_boot must be preserved for the next gate.'             'Build-time ABI/KMI check must pass without bypass; device-side proprietary-module compatibility is still unverified.' 'No flash is authorized until device-side boot/vendor_boot/AVB/KMI verification.'             > artifacts/release/FLASH-GATE.txt
 
           # Keep the patched internal Qualcomm WLAN driver separate from USB adapters.
           # This is an audit/test payload only: do not install or flash it until the

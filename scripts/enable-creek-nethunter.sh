@@ -267,6 +267,60 @@ $CFG \
   -e CONFIG_BT_HS \
   -e CONFIG_BT_6LOWPAN
 
+# The pinned common tree's SDR/media selection adds these exact tuner modules
+# to common/modules.order. Keep the checked-in GKI module allow-list explicit and
+# deterministic so the upstream list consistency check remains meaningful.
+# This is not generated from build output and does not weaken ABI/KMI checks.
+if grep -qx 'CONFIG_MEDIA_SUPPORT=y' "$NETHUNTER_CONFIG" &&
+   grep -qx 'CONFIG_MEDIA_SDR_SUPPORT=y' "$NETHUNTER_CONFIG"; then
+  MEDIA_SDR_GKI_MODULES=(
+    drivers/media/tuners/tuner-xc2028.ko
+    drivers/media/tuners/tuner-simple.ko
+    drivers/media/tuners/tuner-types.ko
+    drivers/media/tuners/mt20xx.ko
+    drivers/media/tuners/tda8290.ko
+    drivers/media/tuners/tea5767.ko
+    drivers/media/tuners/tea5761.ko
+    drivers/media/tuners/tda9887.ko
+    drivers/media/tuners/tda827x.ko
+    drivers/media/tuners/tda18271.ko
+    drivers/media/tuners/xc5000.ko
+    drivers/media/tuners/xc4000.ko
+    drivers/media/tuners/msi001.ko
+    drivers/media/tuners/mt2060.ko
+    drivers/media/tuners/mt2063.ko
+    drivers/media/tuners/mt2266.ko
+    drivers/media/tuners/qt1010.ko
+    drivers/media/tuners/mt2131.ko
+    drivers/media/tuners/mxl5005s.ko
+    drivers/media/tuners/mxl5007t.ko
+    drivers/media/tuners/mc44s803.ko
+    drivers/media/tuners/max2165.ko
+    drivers/media/tuners/tda18218.ko
+    drivers/media/tuners/tda18212.ko
+    drivers/media/tuners/e4000.ko
+    drivers/media/tuners/fc2580.ko
+    drivers/media/tuners/tua9001.ko
+    drivers/media/tuners/si2157.ko
+    drivers/media/tuners/fc0011.ko
+    drivers/media/tuners/fc0012.ko
+    drivers/media/tuners/fc0013.ko
+    drivers/media/tuners/it913x.ko
+    drivers/media/tuners/r820t.ko
+    drivers/media/tuners/mxl301rf.ko
+    drivers/media/tuners/qm1d1c0042.ko
+    drivers/media/tuners/qm1d1b0004.ko
+    drivers/media/tuners/m88rs6000t.ko
+    drivers/media/tuners/tda18250.ko
+  )
+  for module in "${MEDIA_SDR_GKI_MODULES[@]}"; do
+    if ! grep -qxF "$module" "$GKI_MODULES_LIST"; then
+      printf '%s\n' "$module" >> "$GKI_MODULES_LIST"
+    fi
+  done
+  echo "[nethunter] explicit SDR GKI module allow-list entries added: ${#MEDIA_SDR_GKI_MODULES[@]}"
+fi
+
 # NFS client + server. Keep Kerberos disabled for simple sec=sys Android use.
 $CFG \
   -e CONFIG_NETWORK_FILESYSTEMS \
