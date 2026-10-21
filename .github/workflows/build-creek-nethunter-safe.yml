@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh scripts/verify-creek-adapter-release.sh; do bash -n "$f"; done
+          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh scripts/verify-creek-adapter-release.sh scripts/guard-creek-ak3.sh; do bash -n "$f"; done
           for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
           # Keep the known-incompatible third-party rtw88 fork out of the
           # default module stage. Its MODPOST failure (undefined skb_copy_header)
@@ -353,6 +353,8 @@ jobs:
           echo "1e665e8e5dcd2b9d2e4a09a57493d6822f52a5b90d997695651a22ed84b848c3  $RUNNER_TEMP/Creek-Nethunter-upstream-AK3.zip" | sha256sum -c -
           mkdir -p artifacts/ak3
           unzip -q "$RUNNER_TEMP/Creek-Nethunter-upstream-AK3.zip" -d artifacts/ak3
+          # Keep candidate installs blocked until Android 16 ABI/KMI and stock-module compatibility are proven.
+          bash scripts/guard-creek-ak3.sh artifacts/ak3
           if [ -s "$DIST_DIR/Image.gz" ]; then
             cp "$DIST_DIR/Image.gz" artifacts/ak3/Image.gz
           else
