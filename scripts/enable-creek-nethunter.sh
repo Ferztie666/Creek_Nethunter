@@ -440,6 +440,17 @@ merge_nethunter_config() {
   # the five in-tree USB Wi-Fi drivers in the FINAL config after that merge;
   # setting them only in nethunter.config is insufficient when the stock
   # .config already has them disabled. olddefconfig below resolves dependencies.
+  # Preserve any dependency already built into the stock GKI. For dependencies
+  # not built-in, request module form in the FINAL .config as well; the earlier
+  # fragment merge uses -y and intentionally preserves stock values.
+  local symbol
+  for symbol in MAC80211 ATH_COMMON ATH9K_HW RT2X00 RT2X00_LIB RT2X00_LIB_USB RT2800_LIB RT2800_LIB_MMIO; do
+    if ! grep -qx "CONFIG_${symbol}=y" "${config_file}" &&
+       grep -RqsE "^[[:space:]]*(menuconfig|config)[[:space:]]+${symbol}" \
+         "${KERNEL_DIR}/drivers/net/wireless" "${KERNEL_DIR}/net/wireless" 2>/dev/null; then
+      "${KERNEL_DIR}/scripts/config" --file "${config_file}" -m "CONFIG_${symbol}"
+    fi
+  done
   "${KERNEL_DIR}/scripts/config" --file "${config_file}" \
     -m CONFIG_ATH9K_HTC \
     -m CONFIG_CARL9170 \
