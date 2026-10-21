@@ -397,8 +397,8 @@ merge_nethunter_config() {
   test -s "${fragment}" || { echo "ERROR: NetHunter fragment missing: ${fragment}" >&2; return 1; }
   (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
 
-  # Keep optional USB adapter drivers out of the final config until their
-  # Kconfig dependency chain is resolved and tested against this pinned source.
+  # Resolve the requested USB Wi-Fi driver dependency chain before compilation.
+  # The module allow-list is updated only after all five final values are verified.
 
   # Disable both spellings in common/GKI. In this pinned source the GSI
   # gadget can be selected through CONFIG_USB_CONFIGFS_F_GSI rather than
@@ -434,7 +434,7 @@ merge_nethunter_config() {
       return 1
     fi
     if ! grep -qxF "$module_path" "$module_list"; then
-      printf '%s\\n' "$module_path" >> "$module_list"
+      printf '%s\n' "$module_path" >> "$module_list"
     fi
   done
   echo "[nethunter] resolved 5 USB Wi-Fi drivers; their exact .ko paths are now allow-listed"
