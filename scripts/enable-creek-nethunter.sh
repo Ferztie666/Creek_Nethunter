@@ -124,6 +124,7 @@ CFG="$COMMON/scripts/config --file $NETHUNTER_CONFIG"
 # DroidSpaces/container support + ABI-safe SYSVIPC patches above.
 $CFG \
   -d CONFIG_LOCALVERSION_AUTO \
+  --set-str CONFIG_LOCALVERSION "" \
   -e CONFIG_SYSVIPC \
   -e CONFIG_DEVTMPFS \
   -e CONFIG_PID_NS \
