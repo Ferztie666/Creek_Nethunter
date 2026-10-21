@@ -19,6 +19,14 @@ trap 'rm -f "$candidate_list" "$adapter_list"' EXIT
 unzip -Z1 "$ARTIFACT_ROOT/Creek-Nethunter-gki-candidate.zip" | sort > "$candidate_list"
 unzip -Z1 "$ARTIFACT_ROOT/Creek-Nethunter-adapters-modules.zip" | sort > "$adapter_list"
 
+# Candidate AK3 must contain a hard install-time stop while compatibility is unverified.
+if ! unzip -p "$ARTIFACT_ROOT/Creek-Nethunter-gki-AK3-candidate.zip" anykernel.sh | grep -q 'CREEK_NETHTUNTER_FLASH_GATE_V1'; then
+  die "AK3 candidate lacks the mandatory install-time flash gate"
+fi
+if ! unzip -p "$ARTIFACT_ROOT/Creek-Nethunter-gki-AK3-candidate.zip" anykernel.sh | grep -q 'CREEK_FLASH_ALLOWED="NO"'; then
+  die "AK3 candidate flash gate is not set to NO"
+fi
+
 # Candidate kernel bundle must not contain replacement stock partitions or .ko payloads.
 if grep -Eq '(^|/)(vendor_boot\.img|vendor_dlkm\.img|system_dlkm\.img|qca_cld3_wlan\.ko)$|\.ko(\.(xz|gz|zst))?$' "$candidate_list"; then
   cat "$candidate_list" >&2
