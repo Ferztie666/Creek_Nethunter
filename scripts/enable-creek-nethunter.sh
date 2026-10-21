@@ -271,22 +271,38 @@ $CFG \
   -e CONFIG_BT_HS \
   -e CONFIG_BT_6LOWPAN
 
-# Request source-backed USB Wi-Fi drivers in the GKI tree. Vendor-menu symbols
-# are required for Kconfig to expose the drivers; olddefconfig resolves each
-# driver's transitive dependencies. The post-defconfig hook below fails early if
-# any requested driver is dropped, and only then adds its real module path to the
-# GKI module allow-list. No MODPOST/KMI failure is ignored.
-$CFG \
-  -e CONFIG_WLAN_VENDOR_ATH \
-  -e CONFIG_WLAN_VENDOR_RALINK \
-  -e CONFIG_WLAN_VENDOR_ZYDAS \
-  -d CONFIG_MAC80211_LEDS \
-  -m CONFIG_ATH9K_HTC \
-  -m CONFIG_CARL9170 \
-  -m CONFIG_RT2800USB \
-  -m CONFIG_RT73USB \
-  -m CONFIG_ZD1211RW
-
+# Request the five additional in-tree USB Wi-Fi drivers only when the
+# pinned common source actually defines their Kconfig symbols. Some Android GKI
+# snapshots prune upstream drivers; scripts/config accepts unknown symbols, but
+# olddefconfig silently drops them. Record unsupported targets instead of making
+# one absent driver abort the entire kernel build.
+ADAPTER_WIFI_SPECS=(
+  "ATH9K_HTC:drivers/net/wireless/ath/ath9k/ath9k_htc.ko:ATH"
+  "CARL9170:drivers/net/wireless/ath/carl9170/carl9170.ko:ATH"
+  "RT2800USB:drivers/net/wireless/ralink/rt2x00/rt2800usb.ko:RALINK"
+  "RT73USB:drivers/net/wireless/ralink/rt2x00/rt73usb.ko:RALINK"
+  "ZD1211RW:drivers/net/wireless/zydas/zd1211rw/zd1211rw.ko:ZYDAS"
+)
+for spec in "${ADAPTER_WIFI_SPECS[@]}"; do
+  symbol="${spec%%:*}"
+  rest="${spec#*:}"
+  vendor="${rest##*:}"
+  if grep -RqsE "^[[:space:]]*(menuconfig|config)[[:space:]]+${symbol}([[:space:]]|$)" "$COMMON/drivers/net/wireless"; then
+    case "$vendor" in
+      ATH) vendor_symbol=WLAN_VENDOR_ATH ;;
+      RALINK) vendor_symbol=WLAN_VENDOR_RALINK ;;
+      ZYDAS) vendor_symbol=WLAN_VENDOR_ZYDAS ;;
+      *) echo "ERROR: invalid adapter vendor key: $vendor" >&2; exit 1 ;;
+    esac
+    if grep -RqsE "^[[:space:]]*(menuconfig|config)[[:space:]]+${vendor_symbol}([[:space:]]|$)" "$COMMON/drivers/net/wireless"; then
+      "$COMMON/scripts/config" --file "$NETHUNTER_CONFIG" -e "CONFIG_${vendor_symbol}"
+    fi
+    "$COMMON/scripts/config" --file "$NETHUNTER_CONFIG" -d CONFIG_MAC80211_LEDS -m "CONFIG_${symbol}"
+    echo "[nethunter] requested optional USB Wi-Fi driver CONFIG_${symbol}=m"
+  else
+    echo "[nethunter] optional USB Wi-Fi driver CONFIG_${symbol} is absent from pinned common Kconfig; it will be reported NOT_BUILT"
+  fi
+done
 
 # The pinned common tree's SDR/media selection adds these exact tuner modules
 # to common/modules.order. Keep the checked-in GKI module allow-list explicit and
@@ -413,10 +429,11 @@ merge_nethunter_config() {
   read -r -a nh_make_args <<< "${MAKE_ARGS:-}"
   (cd "${KERNEL_DIR}" && make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" olddefconfig)
 
-  # The previous generator appended module paths before Kconfig resolution,
-  # causing the GKI module-list gate to fail when dependencies dropped a target.
-  # Resolve first; fail with the exact symbol if any requested driver is not a
-  # loadable module; only then add its real Kbuild path to the allow-list.
+  # Keep the GKI allow-list tied to the FINAL resolved config. Optional
+  # upstream drivers are enabled only if this pinned source contains their
+  # Kconfig symbol and olddefconfig preserves CONFIG_*=m. Unsupported optional
+  # drivers are reported, not fabricated and not allowed to break unrelated
+  # kernel features. Any driver that does build still faces the normal KMI gate.
   local module_list="${KERNEL_DIR}/android/gki_aarch64_modules"
   test -f "$module_list" || { echo "ERROR: GKI module allow-list missing: $module_list" >&2; return 1; }
   local -a adapter_specs=(
@@ -426,19 +443,21 @@ merge_nethunter_config() {
     "RT73USB:drivers/net/wireless/ralink/rt2x00/rt73usb.ko"
     "ZD1211RW:drivers/net/wireless/zydas/zd1211rw/zd1211rw.ko"
   )
+  local resolved_wifi=0
   for spec in "${adapter_specs[@]}"; do
     local symbol="${spec%%:*}"
     local module_path="${spec#*:}"
-    if ! grep -qx "CONFIG_${symbol}=m" "$config_file"; then
-      echo "ERROR: requested USB Wi-Fi driver CONFIG_${symbol} did not resolve to =m after olddefconfig" >&2
-      grep -E "^CONFIG_(${symbol}|WLAN_VENDOR_ATH|WLAN_VENDOR_RALINK|WLAN_VENDOR_ZYDAS|MAC80211|CFG80211|USB)=" "$config_file" >&2 || true
-      return 1
-    fi
-    if ! grep -qxF "$module_path" "$module_list"; then
-      printf '%s\n' "$module_path" >> "$module_list"
+    if grep -qx "CONFIG_${symbol}=m" "$config_file"; then
+      if ! grep -qxF "$module_path" "$module_list"; then
+        printf '%s\n' "$module_path" >> "$module_list"
+      fi
+      echo "[nethunter] OPTIONAL_DRIVER=RESOLVED CONFIG_${symbol}=m path=${module_path}"
+      resolved_wifi=$((resolved_wifi + 1))
+    else
+      echo "[nethunter] OPTIONAL_DRIVER=NOT_BUILT CONFIG_${symbol}; source/dependencies do not provide a loadable module"
     fi
   done
-  echo "[nethunter] resolved 5 USB Wi-Fi drivers; their exact .ko paths are now allow-listed"
+  echo "[nethunter] optional USB Wi-Fi modules resolved: $resolved_wifi/5"
 
   # Validate the FINAL resolved GKI .config, not only nethunter.config. The
   # previous tcp_cong_avoid_ai KMI failure demonstrates why fragment-only checks
