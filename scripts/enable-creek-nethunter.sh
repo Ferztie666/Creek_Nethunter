@@ -269,62 +269,10 @@ $CFG \
   -e CONFIG_BT_HS \
   -e CONFIG_BT_6LOWPAN
 
-# In-tree USB Wi-Fi adapter drivers present in this pinned Linux 5.15 common tree.
-# These are compiled as GKI modules (not vendor/MSM modules), so their KMI is
-# checked by the normal GKI build. Do not include out-of-tree RTW88/MT76 here:
-# those source ports remain quarantined until their MODPOST/KMI checks pass.
-# Request the shared in-tree dependency stack too. Kconfig will resolve
-# impossible combinations, and the final-config assertion below will expose
-# any target that still cannot be built in this pinned GKI.
-USB_WIFI_GKI_DEPENDENCIES=(
-  CONFIG_MAC80211
-  CONFIG_ATH_COMMON
-  CONFIG_ATH9K_HW
-  CONFIG_RT2X00
-  CONFIG_RT2X00_LIB
-  CONFIG_RT2X00_LIB_USB
-  CONFIG_RT2800_LIB
-  CONFIG_RT2800_LIB_MMIO
-)
-for symbol in "${USB_WIFI_GKI_DEPENDENCIES[@]}"; do
-  if grep -RqsE "^[[:space:]]*(menuconfig|config)[[:space:]]+${symbol#CONFIG_}" \
-      "$COMMON/drivers/net/wireless" "$COMMON/net/wireless" 2>/dev/null; then
-    "$COMMON/scripts/config" --file "$NETHUNTER_CONFIG" -m "$symbol"
-  fi
-done
-
-USB_WIFI_GKI_SYMBOLS=(
-  CONFIG_ATH9K_HTC
-  CONFIG_CARL9170
-  CONFIG_RT2800USB
-  CONFIG_RT73USB
-  CONFIG_ZD1211RW
-)
-for symbol in "${USB_WIFI_GKI_SYMBOLS[@]}"; do
-  if ! grep -RqsE "^[[:space:]]*(menuconfig|config)[[:space:]]+${symbol#CONFIG_}" \
-      "$COMMON/drivers/net/wireless" "$COMMON/net/wireless" 2>/dev/null; then
-    echo "[nethunter] USB Wi-Fi symbol unavailable in pinned common source: $symbol"
-    continue
-  fi
-  "$COMMON/scripts/config" --file "$NETHUNTER_CONFIG" -m "$symbol"
-done
-
-# Keep the GKI module allow-list explicit for each in-tree adapter driver.
-# Their dependency modules remain subject to the source's own modules.order,
-# modpost and ABI/KMI checks; no KMI/export allowlist is widened here.
-USB_WIFI_GKI_MODULES=(
-  drivers/net/wireless/ath/ath9k/ath9k_htc.ko
-  drivers/net/wireless/ath/carl9170/carl9170.ko
-  drivers/net/wireless/ralink/rt2x00/rt2800usb.ko
-  drivers/net/wireless/ralink/rt2x00/rt73usb.ko
-  drivers/net/wireless/zydas/zd1211rw/zd1211rw.ko
-)
-for module in "${USB_WIFI_GKI_MODULES[@]}"; do
-  if ! grep -qxF "$module" "$GKI_MODULES_LIST"; then
-    printf '%s\n' "$module" >> "$GKI_MODULES_LIST"
-  fi
-done
-echo "[nethunter] requested in-tree USB Wi-Fi GKI modules: ${#USB_WIFI_GKI_MODULES[@]}"
+# Do not list optional USB Wi-Fi modules until the pinned GKI final config
+# resolves their Kconfig symbols and modules.order contains their actual .ko.
+# The previous build proved ATH9K_HTC is dropped by Kconfig dependency resolution;
+# pre-listing those paths causes the upstream module-list consistency gate to fail.
 
 # The pinned common tree's SDR/media selection adds these exact tuner modules
 # to common/modules.order. Keep the checked-in GKI module allow-list explicit and
@@ -436,27 +384,8 @@ merge_nethunter_config() {
   test -s "${fragment}" || { echo "ERROR: NetHunter fragment missing: ${fragment}" >&2; return 1; }
   (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
 
-  # The -y merge deliberately preserves stock GKI values. Explicitly request
-  # the five in-tree USB Wi-Fi drivers in the FINAL config after that merge;
-  # setting them only in nethunter.config is insufficient when the stock
-  # .config already has them disabled. olddefconfig below resolves dependencies.
-  # Preserve any dependency already built into the stock GKI. For dependencies
-  # not built-in, request module form in the FINAL .config as well; the earlier
-  # fragment merge uses -y and intentionally preserves stock values.
-  local symbol
-  for symbol in MAC80211 ATH_COMMON ATH9K_HW RT2X00 RT2X00_LIB RT2X00_LIB_USB RT2800_LIB RT2800_LIB_MMIO; do
-    if ! grep -qx "CONFIG_${symbol}=y" "${config_file}" &&
-       grep -RqsE "^[[:space:]]*(menuconfig|config)[[:space:]]+${symbol}" \
-         "${KERNEL_DIR}/drivers/net/wireless" "${KERNEL_DIR}/net/wireless" 2>/dev/null; then
-      "${KERNEL_DIR}/scripts/config" --file "${config_file}" -m "CONFIG_${symbol}"
-    fi
-  done
-  "${KERNEL_DIR}/scripts/config" --file "${config_file}" \
-    -m CONFIG_ATH9K_HTC \
-    -m CONFIG_CARL9170 \
-    -m CONFIG_RT2800USB \
-    -m CONFIG_RT73USB \
-    -m CONFIG_ZD1211RW
+  # Keep optional USB adapter drivers out of the final config until their
+  # Kconfig dependency chain is resolved and tested against this pinned source.
 
   # Disable both spellings in common/GKI. In this pinned source the GSI
   # gadget can be selected through CONFIG_USB_CONFIGFS_F_GSI rather than
@@ -469,16 +398,6 @@ merge_nethunter_config() {
   read -r -a nh_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a nh_make_args <<< "${MAKE_ARGS:-}"
   (cd "${KERNEL_DIR}" && make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" olddefconfig)
-
-  # Fail with a direct Kconfig diagnostic if requested adapters were dropped.
-  for symbol in ATH9K_HTC CARL9170 RT2800USB RT73USB ZD1211RW; do
-    if ! grep -qx "CONFIG_${symbol}=m" "${config_file}"; then
-      echo "ERROR: requested USB Wi-Fi driver CONFIG_${symbol} did not resolve to m in final GKI .config" >&2
-      grep -E "^(CONFIG_${symbol}=|# CONFIG_${symbol} is not set)" "${config_file}" >&2 || true
-      return 1
-    fi
-  done
-  echo "[nethunter] final GKI config confirms all five requested in-tree USB Wi-Fi drivers as modules"
 
   # Validate the FINAL resolved GKI .config, not only nethunter.config. The
   # previous tcp_cong_avoid_ai KMI failure demonstrates why fragment-only checks
