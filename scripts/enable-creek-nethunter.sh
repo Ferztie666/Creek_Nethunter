@@ -269,6 +269,43 @@ $CFG \
   -e CONFIG_BT_HS \
   -e CONFIG_BT_6LOWPAN
 
+# In-tree USB Wi-Fi adapter drivers present in this pinned Linux 5.15 common tree.
+# These are compiled as GKI modules (not vendor/MSM modules), so their KMI is
+# checked by the normal GKI build. Do not include out-of-tree RTW88/MT76 here:
+# those source ports remain quarantined until their MODPOST/KMI checks pass.
+USB_WIFI_GKI_SYMBOLS=(
+  CONFIG_ATH9K_HTC
+  CONFIG_CARL9170
+  CONFIG_RT2800USB
+  CONFIG_RT73USB
+  CONFIG_ZD1211RW
+)
+for symbol in "${USB_WIFI_GKI_SYMBOLS[@]}"; do
+  if ! grep -RqsE "^[[:space:]]*(menuconfig|config)[[:space:]]+${symbol#CONFIG_}" \
+      "$COMMON/drivers/net/wireless" "$COMMON/net/wireless" 2>/dev/null; then
+    echo "[nethunter] USB Wi-Fi symbol unavailable in pinned common source: $symbol"
+    continue
+  fi
+  "$COMMON/scripts/config" --file "$NETHUNTER_CONFIG" -m "$symbol"
+done
+
+# Keep the GKI module allow-list explicit for each in-tree adapter driver.
+# Their dependency modules remain subject to the source's own modules.order,
+# modpost and ABI/KMI checks; no KMI/export allowlist is widened here.
+USB_WIFI_GKI_MODULES=(
+  drivers/net/wireless/ath/ath9k/ath9k_htc.ko
+  drivers/net/wireless/ath/carl9170/carl9170.ko
+  drivers/net/wireless/ralink/rt2x00/rt2800usb.ko
+  drivers/net/wireless/ralink/rt2x00/rt73usb.ko
+  drivers/net/wireless/zydas/zd1211rw/zd1211rw.ko
+)
+for module in "${USB_WIFI_GKI_MODULES[@]}"; do
+  if ! grep -qxF "$module" "$GKI_MODULES_LIST"; then
+    printf '%s\\n' "$module" >> "$GKI_MODULES_LIST"
+  fi
+done
+echo "[nethunter] requested in-tree USB Wi-Fi GKI modules: ${#USB_WIFI_GKI_MODULES[@]}"
+
 # The pinned common tree's SDR/media selection adds these exact tuner modules
 # to common/modules.order. Keep the checked-in GKI module allow-list explicit and
 # deterministic so the upstream list consistency check remains meaningful.
