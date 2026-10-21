@@ -301,7 +301,7 @@ USB_WIFI_GKI_MODULES=(
 )
 for module in "${USB_WIFI_GKI_MODULES[@]}"; do
   if ! grep -qxF "$module" "$GKI_MODULES_LIST"; then
-    printf '%s\\n' "$module" >> "$GKI_MODULES_LIST"
+    printf '%s\n' "$module" >> "$GKI_MODULES_LIST"
   fi
 done
 echo "[nethunter] requested in-tree USB Wi-Fi GKI modules: ${#USB_WIFI_GKI_MODULES[@]}"
