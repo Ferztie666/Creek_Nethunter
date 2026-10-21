@@ -166,15 +166,15 @@ $CFG -d CONFIG_USB_F_GSI
 $CFG \
   -e CONFIG_USB_F_RNDIS \
   -m CONFIG_USB_U_ETHER \
-  -e CONFIG_BT_HCIBTUSB \
+  -m CONFIG_BT_HCIBTUSB \
   -e CONFIG_BT_HCIBTUSB_BCM \
   -e CONFIG_BT_HCIBTUSB_RTL \
-  -e CONFIG_BT_HCIVHCI \
-  -e CONFIG_BT_HCIBCM203X \
-  -e CONFIG_BT_HCIBPA10X \
-  -e CONFIG_BT_HCIBFUSB \
-  -e CONFIG_USB_AIRSPY \
-  -e CONFIG_USB_HACKRF \
+  -m CONFIG_BT_HCIVHCI \
+  -m CONFIG_BT_HCIBCM203X \
+  -m CONFIG_BT_HCIBPA10X \
+  -m CONFIG_BT_HCIBFUSB \
+  -m CONFIG_USB_AIRSPY \
+  -m CONFIG_USB_HACKRF \
   -e CONFIG_CAN \
   -e CONFIG_CAN_DEV \
   -e CONFIG_CAN_CALC_BITTIMING \
@@ -194,22 +194,23 @@ $CFG \
   -e CONFIG_CAN_M_CAN_TCAN4X5X \
   -e CONFIG_CAN_HI311X \
   -e CONFIG_CAN_MCP251X \
-  -e CONFIG_CAN_8DEV_USB \
-  -e CONFIG_CAN_EMS_USB \
-  -e CONFIG_CAN_ESD_USB2 \
-  -e CONFIG_CAN_GS_USB \
-  -e CONFIG_CAN_KVASER_USB \
-  -e CONFIG_CAN_PEAK_USB \
+  -m CONFIG_CAN_8DEV_USB \
+  -m CONFIG_CAN_EMS_USB \
+  -m CONFIG_CAN_ESD_USB2 \
+  -m CONFIG_CAN_GS_USB \
+  -m CONFIG_CAN_KVASER_USB \
+  -m CONFIG_CAN_PEAK_USB \
+  -m CONFIG_CAN_SLCAN \
   -e CONFIG_NETLINK_DIAG \
   -e CONFIG_VSOCKETS \
   -e CONFIG_NET_SCHED \
   -e CONFIG_NET_EMATCH_CANID \
   -e CONFIG_USB_SERIAL \
   -e CONFIG_USB_SERIAL_CONSOLE \
-  -e CONFIG_USB_SERIAL_GENERIC \
-  -e CONFIG_USB_SERIAL_CH341 \
-  -e CONFIG_USB_SERIAL_FTDI_SIO \
-  -e CONFIG_USB_SERIAL_PL2303 \
+  -m CONFIG_USB_SERIAL_GENERIC \
+  -m CONFIG_USB_SERIAL_CH341 \
+  -m CONFIG_USB_SERIAL_FTDI_SIO \
+  -m CONFIG_USB_SERIAL_PL2303 \
   -e CONFIG_IP_NF_TARGET_TTL \
   -e CONFIG_IP6_NF_TARGET_HL \
   -e CONFIG_IP6_NF_MATCH_HL \
@@ -252,14 +253,14 @@ $CFG \
   -e CONFIG_MEDIA_SDR_SUPPORT \
   -e CONFIG_LIRC \
   -e CONFIG_RC_CORE \
-  -e CONFIG_IR_LIRC_CODEC \
-  -e CONFIG_USB_SERIAL_CP210X \
+  -m CONFIG_IR_LIRC_CODEC \
+  -m CONFIG_USB_SERIAL_CP210X \
   -e CONFIG_W1 \
-  -e CONFIG_W1_MASTER_DS2490 \
-  -e CONFIG_W1_SLAVE_THERM \
-  -e CONFIG_W1_SLAVE_DS2431 \
-  -e CONFIG_W1_SLAVE_DS2433 \
-  -e CONFIG_W1_SLAVE_DS2408 \
+  -m CONFIG_W1_MASTER_DS2490 \
+  -m CONFIG_W1_SLAVE_THERM \
+  -m CONFIG_W1_SLAVE_DS2431 \
+  -m CONFIG_W1_SLAVE_DS2433 \
+  -m CONFIG_W1_SLAVE_DS2408 \
   -e CONFIG_BFQ_GROUP_IOSCHED \
   -e CONFIG_LZ4_COMPRESS \
   -e CONFIG_LOCKUP_DETECTOR \
@@ -458,6 +459,56 @@ merge_nethunter_config() {
     fi
   done
   echo "[nethunter] optional USB Wi-Fi modules resolved: $resolved_wifi/5"
+
+  # Stage only source-backed, Kconfig-resolved hardware driver modules. Core
+  # frameworks stay built-in where required; each module still passes Kbuild,
+  # MODPOST, KMI, dependency and final vermagic checks.
+  local -a hardware_specs=(
+    "USB_AIRSPY:drivers/media/usb/airspy/airspy.ko"
+    "USB_HACKRF:drivers/media/usb/hackrf/hackrf.ko"
+    "USB_SERIAL_CP210X:drivers/usb/serial/cp210x.ko"
+    "USB_SERIAL_CH341:drivers/usb/serial/ch341.ko"
+    "USB_SERIAL_FTDI_SIO:drivers/usb/serial/ftdi_sio.ko"
+    "USB_SERIAL_PL2303:drivers/usb/serial/pl2303.ko"
+    "USB_SERIAL_GENERIC:drivers/usb/serial/usbserial_generic.ko"
+    "W1_MASTER_DS2490:drivers/w1/masters/ds2490.ko"
+    "W1_SLAVE_THERM:drivers/w1/slaves/w1_therm.ko"
+    "W1_SLAVE_DS2431:drivers/w1/slaves/w1_ds2431.ko"
+    "W1_SLAVE_DS2433:drivers/w1/slaves/w1_ds2433.ko"
+    "W1_SLAVE_DS2408:drivers/w1/slaves/w1_ds2408.ko"
+    "IR_LIRC_CODEC:drivers/media/rc/ir-lirc-codec.ko"
+    "CAN_8DEV_USB:drivers/net/can/usb/usb_8dev.ko"
+    "CAN_EMS_USB:drivers/net/can/usb/ems_usb.ko"
+    "CAN_ESD_USB2:drivers/net/can/usb/esd_usb2.ko"
+    "CAN_GS_USB:drivers/net/can/usb/gs_usb.ko"
+    "CAN_KVASER_USB:drivers/net/can/usb/kvaser_usb/kvaser_usb.ko"
+    "CAN_PEAK_USB:drivers/net/can/usb/peak_usb/peak_usb.ko"
+    "CAN_SLCAN:drivers/net/can/slcan/slcan.ko"
+    "BT_HCIBTUSB:drivers/bluetooth/btusb.ko"
+    "BT_HCIBCM203X:drivers/bluetooth/bcm203x.ko"
+    "BT_HCIBPA10X:drivers/bluetooth/bpa10x.ko"
+    "BT_HCIBFUSB:drivers/bluetooth/bfusb.ko"
+    "BT_HCIVHCI:drivers/bluetooth/hci_vhci.ko"
+  )
+  local resolved_hardware=0
+  for spec in "${hardware_specs[@]}"; do
+    local symbol="${spec%%:*}"
+    local module_path="${spec#*:}"
+    if grep -qx "CONFIG_${symbol}=m" "$config_file"; then
+      if [ ! -f "${KERNEL_DIR}/${module_path%.ko}.c" ]; then
+        echo "[nethunter] HARDWARE_MODULE=SOURCE_PATH_UNCONFIRMED CONFIG_${symbol} path=${module_path}; allow-list omitted"
+        continue
+      fi
+      if ! grep -qxF "$module_path" "$module_list"; then
+        printf '%s\n' "$module_path" >> "$module_list"
+      fi
+      echo "[nethunter] HARDWARE_MODULE=REQUESTED CONFIG_${symbol} path=${module_path}"
+      resolved_hardware=$((resolved_hardware + 1))
+    else
+      echo "[nethunter] HARDWARE_MODULE=NOT_MODULAR CONFIG_${symbol}; not staged as adapter .ko"
+    fi
+  done
+  echo "[nethunter] source-backed hardware module targets allow-listed: $resolved_hardware"
 
   # Validate the FINAL resolved GKI .config, not only nethunter.config. The
   # previous tcp_cong_avoid_ai KMI failure demonstrates why fragment-only checks
