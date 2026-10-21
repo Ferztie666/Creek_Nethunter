@@ -115,7 +115,14 @@ def main() -> int:
                 reasons[name] = (False, "BLOCKED_MODVERSION_READ_ERROR", [])
                 return False, "BLOCKED_MODVERSION_READ_ERROR", []
             missing = [sym for sym, crc in versions if sym not in symvers]
-            mismatched = [sym for sym, crc in versions if sym in symvers and crc not in symvers[sym]]
+            # Module.symvers is collected from several build domains. If the same
+            # symbol has conflicting CRCs across those domains, accepting any one
+            # CRC is ambiguous and can accidentally approve an incompatible binary.
+            ambiguous = [sym for sym, crc in versions if sym in symvers and len(symvers[sym]) != 1]
+            mismatched = [sym for sym, crc in versions if sym in symvers and len(symvers[sym]) == 1 and crc not in symvers[sym]]
+            if ambiguous:
+                reasons[name] = (False, "BLOCKED_SYMBOL_CRC_AMBIGUOUS:" + ",".join(sorted(set(ambiguous))[:8]), [])
+                return False, reasons[name][1], []
             if missing:
                 reasons[name] = (False, "BLOCKED_SYMBOL_MISSING:" + ",".join(sorted(set(missing))[:8]), [])
                 return False, reasons[name][1], []
