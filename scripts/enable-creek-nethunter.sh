@@ -416,6 +416,17 @@ merge_nethunter_config() {
   test -s "${fragment}" || { echo "ERROR: NetHunter fragment missing: ${fragment}" >&2; return 1; }
   (cd "${KERNEL_DIR}" && KCONFIG_CONFIG="${config_file}" scripts/kconfig/merge_config.sh -y -m "${config_file}" "${fragment}")
 
+  # The -y merge deliberately preserves stock GKI values. Explicitly request
+  # the five in-tree USB Wi-Fi drivers in the FINAL config after that merge;
+  # setting them only in nethunter.config is insufficient when the stock
+  # .config already has them disabled. olddefconfig below resolves dependencies.
+  "${KERNEL_DIR}/scripts/config" --file "${config_file}" \
+    -m CONFIG_ATH9K_HTC \
+    -m CONFIG_CARL9170 \
+    -m CONFIG_RT2800USB \
+    -m CONFIG_RT73USB \
+    -m CONFIG_ZD1211RW
+
   # Disable both spellings in common/GKI. In this pinned source the GSI
   # gadget can be selected through CONFIG_USB_CONFIGFS_F_GSI rather than
   # CONFIG_USB_F_GSI; disabling only one name left usb_f_gsi.ko in the build
