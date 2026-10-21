@@ -241,6 +241,8 @@ $CFG \
 # olddefconfig resolves dependencies; final values are audited in the workflow.
 # Unsupported symbols are reported, never fabricated as .ko files.
 $CFG \
+  -m CONFIG_CFG80211 \
+  -m CONFIG_MAC80211 \
   -e CONFIG_CFG80211_INTERNAL_REGDB \
   -d CONFIG_CFG80211_CRDA_SUPPORT \
   -e CONFIG_MAC80211_MESH \
