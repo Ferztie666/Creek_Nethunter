@@ -495,8 +495,11 @@ merge_nethunter_config() {
     local symbol="${spec%%:*}"
     local module_path="${spec#*:}"
     if grep -qx "CONFIG_${symbol}=m" "$config_file"; then
-      if [ ! -f "${KERNEL_DIR}/${module_path%.ko}.c" ]; then
-        echo "[nethunter] HARDWARE_MODULE=SOURCE_PATH_UNCONFIRMED CONFIG_${symbol} path=${module_path}; allow-list omitted"
+      local module_dir="${module_path%/*}"
+      local module_obj="${module_path##*/}"
+      module_obj="${module_obj%.ko}.o"
+      if ! grep -RqsF --include=Makefile "$module_obj" "${KERNEL_DIR}/${module_dir}"; then
+        echo "[nethunter] HARDWARE_MODULE=KBUILD_TARGET_UNCONFIRMED CONFIG_${symbol} path=${module_path}; allow-list omitted"
         continue
       fi
       if ! grep -qxF "$module_path" "$module_list"; then
