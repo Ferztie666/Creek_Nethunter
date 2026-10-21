@@ -240,7 +240,7 @@ jobs:
           echo "CURRENT_STOCK_FAMILY=5.15.194-android13-8-00019-gf4321180a397-ab15212794" | tee -a "$REPORT"
           echo "FLASH_ALLOWED=NO" | tee -a "$REPORT"
           echo "Absent options are not assumed enabled." | tee -a "$REPORT"
-          symbols='CFG80211_INTERNAL_REGDB CFG80211_CRDA_SUPPORT MAC80211_MESH NFC NFC_NCI NFC_LLCP NFC_DIGITAL NFC_HCI MEDIA_SUPPORT MEDIA_SDR_SUPPORT LIRC RC_CORE IR_LIRC_CODEC USB_SERIAL_CP210X W1 W1_MASTER_DS2490 W1_SLAVE_THERM W1_SLAVE_DS2431 W1_SLAVE_DS2433 W1_SLAVE_DS2408 BFQ_GROUP_IOSCHED LZ4_COMPRESS PANIC_ON_OOPS PANIC_TIMEOUT LOCKUP_DETECTOR SOFTLOCKUP_DETECTOR HARDLOCKUP_DETECTOR WQ_WATCHDOG THERMAL_GOV_POWER_ALLOCATOR CPU_FREQ_GOV_SCHEDUTIL BT_HS BT_6LOWPAN'
+          symbols='CFG80211_INTERNAL_REGDB CFG80211_CRDA_SUPPORT MAC80211 MAC80211_MESH NFC NFC_NCI NFC_LLCP NFC_DIGITAL NFC_HCI MEDIA_SUPPORT MEDIA_SDR_SUPPORT USB_AIRSPY USB_HACKRF LIRC RC_CORE IR_LIRC_CODEC USB_SERIAL USB_SERIAL_CP210X USB_SERIAL_CH341 USB_SERIAL_FTDI_SIO USB_SERIAL_PL2303 USB_SERIAL_CP210X USB_CONFIGFS_F_HID USB_CONFIGFS_MASS_STORAGE USB_CONFIGFS_F_SERIAL USB_CONFIGFS_ECM USB_U_ETHER USB_F_RNDIS TUN WIREGUARD IP_SET NF_TABLES NF_CONNTRACK NF_NAT NFS_FS NFSD KALLSYMS KALLSYMS_ALL BPF BPF_SYSCALL KPROBES FTRACE FUNCTION_TRACER PID_NS USER_NS NET_NS IPC_NS UTS_NS CGROUPS PACKET AF_PACKET PACKET_DIAG CAN CAN_RAW CAN_BCM CAN_DEV CAN_ISOTP CAN_J1939 CAN_SLCAN CAN_GW CAN_VCAN BT BT_BREDR BT_LE BT_HS BT_6LOWPAN BT_HCIBTUSB BRIDGE MAC802154 IEEE802154 IEEE802154_6LOWPAN AF_ALG CRYPTO_USER LZ4_COMPRESS ZRAM ZSMALLOC PANIC_ON_OOPS PANIC_TIMEOUT LOCKUP_DETECTOR SOFTLOCKUP_DETECTOR HARDLOCKUP_DETECTOR WQ_WATCHDOG THERMAL_GOV_POWER_ALLOCATOR CPU_FREQ_GOV_SCHEDUTIL BFQ_GROUP_IOSCHED W1 W1_MASTER_DS2490 W1_SLAVE_THERM W1_SLAVE_DS2431 W1_SLAVE_DS2433 W1_SLAVE_DS2408'
           # Audit the actual Kconfig outputs used by the two build domains.
           # DIST_DIR/.config is not a reliable source of truth for this mixed GKI/MSM build.
           GKI_CFG="$OUT_DIR/gki_kernel/common/.config"
@@ -289,8 +289,19 @@ jobs:
           cp "$DIST_DIR/Image" artifacts/release/Image
           if [ -s "$DIST_DIR/Image.gz" ]; then cp "$DIST_DIR/Image.gz" artifacts/release/Image.gz; fi
 
+          echo "== VERIFY ORIGINAL DEVELOPER ADAPTER BASELINE AGAINST THIS BUILD =="
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://github.com/dr1408/Creek_Nethunter/releases/download/V1.0/adapters-modules.zip" \
+            -o "$RUNNER_TEMP/Creek-Nethunter-upstream-adapters.zip"
+          echo "af2a101f9802b39bbbe751f5b621091b61f03aa336f450aefe3c0e95214dc72b  $RUNNER_TEMP/Creek-Nethunter-upstream-adapters.zip" | sha256sum -c -
+          python3 "$GITHUB_WORKSPACE/scripts/filter-upstream-adapter-modules.py" \
+            --archive "$RUNNER_TEMP/Creek-Nethunter-upstream-adapters.zip" \
+            --staging "$OUT_DIR/staging" \
+            --symvers-root "$OUT_DIR" \
+            --target-list "$GITHUB_WORKSPACE/config/creek-adapter-module-targets.txt" \
+            --report "$GITHUB_WORKSPACE/artifacts/logs/upstream-adapter-compatibility.txt"
           echo "== ADAPTER PACKAGE =="
-          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh"             "$OUT_DIR/staging" artifacts/modules
+          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" "$OUT_DIR/staging" artifacts/modules
           test -s artifacts/modules/MODULE-LIST.txt
           test ! -e artifacts/modules/qca_cld3_wlan.ko
 
@@ -326,9 +337,11 @@ jobs:
 
           # Reuse the original developer's AnyKernel3 layout; replace only Image.gz.
           # This is still a CANDIDATE ZIP, not flash authorization.
+          # Pin the original developer's known-good AK3 baseline by GitHub release digest.
           curl -fL --retry 3 --retry-delay 2 \
             "https://github.com/dr1408/Creek_Nethunter/releases/download/V1.0/Creek-Nethunter-gki-AK3.zip" \
             -o "$RUNNER_TEMP/Creek-Nethunter-upstream-AK3.zip"
+          echo "1e665e8e5dcd2b9d2e4a09a57493d6822f52a5b90d997695651a22ed84b848c3  $RUNNER_TEMP/Creek-Nethunter-upstream-AK3.zip" | sha256sum -c -
           mkdir -p artifacts/ak3
           unzip -q "$RUNNER_TEMP/Creek-Nethunter-upstream-AK3.zip" -d artifacts/ak3
           if [ -s "$DIST_DIR/Image.gz" ]; then
