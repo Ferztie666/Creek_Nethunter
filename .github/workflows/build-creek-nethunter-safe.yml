@@ -37,6 +37,10 @@ jobs:
       BUILD_CONFIG: msm-kernel/build.config.msm.creek
       VARIANT: gki
       LTO: thin
+      # Match the original developer kernel/adapter package release exactly.
+      # CRC and dependency checks still decide whether each upstream .ko is safe.
+      LOCALVERSION: -android13-8-gbf0a81a7f319-dirty
+      EXPECTED_KERNEL_RELEASE: 5.15.167-android13-8-gbf0a81a7f319-dirty
       SKIP_MRPROPER: ${{ github.event_name == 'workflow_dispatch' && inputs.clean == false && '1' || '0' }}
       KERNEL_CMDLINE_CONSOLE_AUTO: "0"
       EXT_MODULES_MAKEFILE: ${{ github.workspace }}/scripts/creek-external-modules.mk
@@ -99,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh; do bash -n "$f"; done
+          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh scripts/verify-creek-adapter-release.sh; do bash -n "$f"; done
           for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
           # Keep the known-incompatible third-party rtw88 fork out of the
           # default module stage. Its MODPOST failure (undefined skb_copy_header)
@@ -214,6 +218,10 @@ jobs:
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
           export BUILD_VENDOR_BOOT_IMG VENDOR_RAMDISK_BINARY
           build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
+          # Fail closed if build.config/Kbuild drops the localversion. The previous
+          # build produced vermagic 5.15.167 only, so every original adapter .ko was
+          # rejected before symbol-CRC checking. Never package a shortened release.
+          bash scripts/verify-creek-adapter-release.sh "$OUT_DIR/staging" "$EXPECTED_KERNEL_RELEASE" "$GITHUB_WORKSPACE/artifacts/logs/module-release-audit.txt"
           # Never package a candidate if the build scripts changed or bypassed
           # the authoritative ABI checker during compilation.
           ABI_CHECKER=""
