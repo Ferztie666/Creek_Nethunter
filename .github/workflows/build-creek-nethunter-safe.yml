@@ -230,7 +230,7 @@ jobs:
             if grep -Fq "ERROR: modules list out of date" "$GITHUB_WORKSPACE/artifacts/logs/build.log" &&
                [ -s "$OUT_DIR/gki_kernel/common/modules.order" ] &&
                [ -s "$KP/common/android/gki_aarch64_modules" ]; then
-              bash scripts/reconcile-creek-gki-module-list.sh \
+              bash "$GITHUB_WORKSPACE/scripts/reconcile-creek-gki-module-list.sh" \
                 "$OUT_DIR/gki_kernel/common/modules.order" \
                 "$KP/common/android/gki_aarch64_modules" \
                 "$GITHUB_WORKSPACE/artifacts/logs/gki-module-list-reconcile.txt"
