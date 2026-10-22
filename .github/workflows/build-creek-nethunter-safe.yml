@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh scripts/verify-creek-adapter-release.sh scripts/guard-creek-ak3.sh; do bash -n "$f"; done
+          for f in scripts/creek-safe-preflight.sh scripts/prepare-creek-stock.sh scripts/enable-creek-nethunter.sh scripts/enable-creek-adapter-configs.sh scripts/package-creek-adapters.sh scripts/verify-creek-safe-output.sh scripts/verify-creek-stock-module-policy.sh scripts/patch-creek-qcacld-monitor.sh scripts/verify-creek-adapter-release.sh scripts/reconcile-creek-gki-module-list.sh scripts/guard-creek-ak3.sh; do bash -n "$f"; done
           for f in scripts/nhd scripts/nh-load.sh scripts/nh-action.sh; do sh -n "$f"; done
           # Keep the known-incompatible third-party rtw88 fork out of the
           # default module stage. Its MODPOST failure (undefined skb_copy_header)
@@ -218,7 +218,28 @@ jobs:
           export BUILD_CONFIG VARIANT LTO SKIP_MRPROPER KERNEL_CMDLINE_CONSOLE_AUTO
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
           export BUILD_VENDOR_BOOT_IMG VENDOR_RAMDISK_BINARY
+          set +e
           build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
+          build_rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$build_rc" -ne 0 ]; then
+            # The pinned Android build checks common/android/gki_aarch64_modules
+            # against the resolved modules.order. NetHunter intentionally enables
+            # a reviewed set of extra GKI modules, so reconcile only that exact
+            # allowlisted delta and rerun once. Never touch the ABI/KMI symbol list.
+            if grep -Fq "ERROR: modules list out of date" "$GITHUB_WORKSPACE/artifacts/logs/build.log" &&
+               [ -s "$OUT_DIR/gki_kernel/common/modules.order" ] &&
+               [ -s "$KP/common/android/gki_aarch64_modules" ]; then
+              bash scripts/reconcile-creek-gki-module-list.sh \
+                "$OUT_DIR/gki_kernel/common/modules.order" \
+                "$KP/common/android/gki_aarch64_modules" \
+                "$GITHUB_WORKSPACE/artifacts/logs/gki-module-list-reconcile.txt"
+              echo "Retrying build once after explicitly reviewed GKI module-list reconciliation."
+              build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build-retry.log"
+            else
+              exit "$build_rc"
+            fi
+          fi
           # Fail closed if build.config/Kbuild drops the localversion. The previous
           # build produced vermagic 5.15.167 only, so every original adapter .ko was
           # rejected before symbol-CRC checking. Never package a shortened release.
