@@ -23,24 +23,10 @@ comm -23 "$tmpdir/allow.sorted" "$tmpdir/order.sorted" > "$tmpdir/removals"
 # Explicitly reviewed optional targets expected from the NetHunter config
 # on the pinned Creek tree. Any unreviewed addition/removal remains fatal.
 cat > "$tmpdir/approved-additions" <<'EOF'
-drivers/net/can/usb/usb_8dev.ko
-drivers/net/can/usb/ems_usb.ko
-drivers/net/can/usb/esd_usb2.ko
-drivers/net/can/usb/gs_usb.ko
-drivers/net/can/usb/kvaser_usb/kvaser_usb.ko
-drivers/net/can/usb/peak_usb/peak_usb.ko
 drivers/net/can/slcan.ko
 drivers/net/wireless/ath/ath.ko
 drivers/net/wireless/ath/ath9k/ath9k_common.ko
 drivers/net/wireless/ath/ath9k/ath9k_hw.ko
-drivers/net/wireless/ath/ath9k/ath9k_htc.ko
-drivers/net/wireless/ath/carl9170/carl9170.ko
-drivers/net/wireless/zydas/zd1211rw/zd1211rw.ko
-drivers/usb/serial/ch341.ko
-drivers/usb/serial/cp210x.ko
-drivers/usb/serial/ftdi_sio.ko
-drivers/usb/serial/pl2303.ko
-drivers/w1/slaves/w1_ds2408.ko
 drivers/bluetooth/btintel.ko
 drivers/bluetooth/btrtl.ko
 net/mac80211/mac80211.ko
