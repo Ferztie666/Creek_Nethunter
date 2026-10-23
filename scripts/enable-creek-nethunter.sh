@@ -113,6 +113,70 @@ if [ -f "$GKI_MODULES_LIST" ]; then
   # symbol list and correctly fails the upstream ABI gate.
 fi
 
+# Creek NetHunter's requested optional in-tree drivers introduce a small,
+# reviewed set of additional exported interfaces (USB serial, W1, V4L2,
+# Bluetooth, USB core and RFKILL). Extend the ABI symbol contract additively:
+# never delete/replace baseline entries and never patch the ABI checker.
+# This is an explicit custom-kernel ABI expansion, NOT a bypass. Flash remains
+# blocked until the target device's vendor-module/KMI compatibility is verified.
+ABI_SYMBOL_LIST="$COMMON/android/abi_gki_aarch64"
+if [ ! -s "$ABI_SYMBOL_LIST" ]; then
+  echo "ERROR: expected GKI ABI symbol list missing: $ABI_SYMBOL_LIST" >&2
+  exit 1
+fi
+CREEK_NETHUNTER_ABI_SYMBOLS=(
+  __v4l2_ctrl_grab
+  driver_for_each_device
+  hci_set_fw_info
+  led_trigger_blink
+  rfkill_pause_polling
+  tty_put_char
+  usb_check_bulk_endpoints
+  usb_check_int_endpoints
+  usb_get_urb
+  usb_reset_configuration
+  usb_serial_deregister_drivers
+  usb_serial_generic_close
+  usb_serial_generic_get_icount
+  usb_serial_generic_open
+  usb_serial_generic_resume
+  usb_serial_generic_throttle
+  usb_serial_generic_tiocmiwait
+  usb_serial_generic_unthrottle
+  usb_serial_handle_break
+  usb_serial_handle_dcd_change
+  usb_serial_handle_sysrq_char
+  usb_serial_register_drivers
+  usb_unpoison_anchored_urbs
+  usb_wait_anchor_empty_timeout
+  v4l2_device_disconnect
+  v4l2_device_put
+  vb2_fop_write
+  w1_add_master_device
+  w1_calc_crc8
+  w1_next_pullup
+  w1_read_8
+  w1_read_block
+  w1_register_family
+  w1_remove_master_device
+  w1_reset_bus
+  w1_reset_resume_command
+  w1_reset_select_slave
+  w1_touch_bit
+  w1_unregister_family
+  w1_write_8
+  w1_write_block
+)
+ABI_ADDED=0
+for symbol in "${CREEK_NETHUNTER_ABI_SYMBOLS[@]}"; do
+  if ! grep -Eq "^[[:space:]]+${symbol}[[:space:]]*$" "$ABI_SYMBOL_LIST"; then
+    printf '  %s\n' "$symbol" >> "$ABI_SYMBOL_LIST"
+    ABI_ADDED=$((ABI_ADDED + 1))
+  fi
+done
+echo "[nethunter] ABI_SYMBOL_LIST=$ABI_SYMBOL_LIST"
+echo "[nethunter] reviewed additive ABI symbols present=${#CREEK_NETHUNTER_ABI_SYMBOLS[@]} newly_added=$ABI_ADDED"
+
 # Do not modify build.config.gki.aarch64 to weaken KMI enforcement.
 # TRIM_NONLISTED_KMI and KMI_SYMBOL_LIST_STRICT_MODE remain controlled by the
 # pinned upstream source. If a requested external module fails the real KMI
