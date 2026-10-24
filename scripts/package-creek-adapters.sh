@@ -1,28 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-STAGING="${1:?usage: package-creek-adapters.sh <staging> <output-dir>}"
-OUT="${2:?usage: package-creek-adapters.sh <staging> <output-dir>}"
+STAGING="${1:?usage: package-creek-adapters.sh <staging> <output-dir> [gki-staging]}"
+OUT="${2:?usage: package-creek-adapters.sh <staging> <output-dir> [gki-staging]}"
+GKI_STAGING="${3:-}"
 SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-MODROOT=""
+declare -a MODULE_ROOTS=()
+# Prefer modules compiled in the inner GKI build; fill gaps from the outer
+# vendor staging tree (for example rtl8xxxu and the QCACLD audit module).
+if [ -n "$GKI_STAGING" ]; then
+  for d in "$GKI_STAGING"/lib/modules/*; do
+    [ -d "$d" ] && MODULE_ROOTS+=("$d")
+  done
+fi
 for d in "$STAGING"/lib/modules/*; do
-  if [ -d "$d" ]; then MODROOT="$d"; break; fi
+  [ -d "$d" ] && MODULE_ROOTS+=("$d")
 done
-[ -n "$MODROOT" ] || { echo "ERROR: no staging kernel module directory found: $STAGING" >&2; exit 1; }
+[ "${#MODULE_ROOTS[@]}" -gt 0 ] || { echo "ERROR: no module roots found under $STAGING or $GKI_STAGING" >&2; exit 1; }
+MODROOT="${MODULE_ROOTS[0]}"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
 declare -A BY_NAME
-while IFS= read -r -d '' f; do
-  n="${f##*/}"
-  n="${n%.ko}"
-  n="$(printf '%s' "$n" | tr '-' '_')"
-  BY_NAME["$n"]="$f"
-done < <(find "$MODROOT" -type f -name '*.ko' -print0)
+for root in "${MODULE_ROOTS[@]}"; do
+  while IFS= read -r -d '' f; do
+    n="${f##*/}"
+    n="${n%.ko}"
+    n="$(printf '%s' "$n" | tr '-' '_')"
+    # First root wins, so a GKI-built module takes precedence over duplicates.
+    [ -n "${BY_NAME[$n]:-}" ] || BY_NAME["$n"]="$f"
+  done < <(find "$root" -type f -name '*.ko' -print0)
+done
 
 echo "ADAPTER_STAGE=${MODROOT}"
+echo "ADAPTER_STAGE_ROOTS=${#MODULE_ROOTS[@]}"
 echo "TOTAL_STAGED_MODULES=${#BY_NAME[@]}"
 
 declare -A WANT

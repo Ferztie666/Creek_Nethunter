@@ -243,7 +243,7 @@ jobs:
           # Fail closed if build.config/Kbuild drops the localversion. The previous
           # build produced vermagic 5.15.167 only, so every original adapter .ko was
           # rejected before symbol-CRC checking. Never package a shortened release.
-          bash "$GITHUB_WORKSPACE/scripts/verify-creek-adapter-release.sh" "$OUT_DIR/staging" "$EXPECTED_KERNEL_RELEASE" "$GITHUB_WORKSPACE/artifacts/logs/module-release-audit.txt"
+          bash "$GITHUB_WORKSPACE/scripts/verify-creek-adapter-release.sh" "$OUT_DIR/staging" "$EXPECTED_KERNEL_RELEASE" "$GITHUB_WORKSPACE/artifacts/logs/module-release-audit.txt" "$OUT_DIR/gki_kernel/staging"
           # Never package a candidate if the build scripts changed or bypassed
           # the authoritative ABI checker during compilation.
           ABI_CHECKER=""
@@ -327,11 +327,12 @@ jobs:
           python3 "$GITHUB_WORKSPACE/scripts/filter-upstream-adapter-modules.py" \
             --archive "$RUNNER_TEMP/Creek-Nethunter-upstream-adapters.zip" \
             --staging "$OUT_DIR/staging" \
+            --gki-staging "$OUT_DIR/gki_kernel/staging" \
             --symvers-root "$OUT_DIR" \
             --target-list "$GITHUB_WORKSPACE/config/creek-adapter-module-targets.txt" \
             --report "$GITHUB_WORKSPACE/artifacts/logs/upstream-adapter-compatibility.txt"
           echo "== ADAPTER PACKAGE =="
-          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" "$OUT_DIR/staging" artifacts/modules
+          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" "$OUT_DIR/staging" artifacts/modules "$OUT_DIR/gki_kernel/staging"
           test -s artifacts/modules/MODULE-LIST.txt
           test ! -e artifacts/modules/qca_cld3_wlan.ko
 

@@ -34,22 +34,29 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--archive", required=True)
     ap.add_argument("--staging", required=True)
+    ap.add_argument("--gki-staging", default=None, help="optional inner GKI staging root")
     ap.add_argument("--symvers-root", required=True)
     ap.add_argument("--target-list", required=True)
     ap.add_argument("--report", required=True)
     a = ap.parse_args()
     staging = Path(a.staging)
+    gki_staging = Path(a.gki_staging) if a.gki_staging else None
     report = Path(a.report)
     report.parent.mkdir(parents=True, exist_ok=True)
-    roots = sorted(staging.glob("lib/modules/*"))
-    roots = [p for p in roots if p.is_dir()]
+    roots = []
+    if gki_staging is not None:
+        roots.extend(sorted(p for p in gki_staging.glob("lib/modules/*") if p.is_dir()))
+    roots.extend(sorted(p for p in staging.glob("lib/modules/*") if p.is_dir()))
     if not roots:
-        raise SystemExit(f"ERROR: no staged module root under {staging}/lib/modules")
+        raise SystemExit(f"ERROR: no staged module roots under {staging}/lib/modules or {gki_staging}/lib/modules")
+    # GKI root comes first so expected vermagic matches the kernel image build.
     modroot = roots[0]
     staged: dict[str, Path] = {}
-    for p in modroot.rglob("*.ko"):
-        staged.setdefault(canon(p.name), p)
-    baseline = staged.get("qca_cld3_wlan") or staged.get("rtl8xxxu")
+    for root in roots:
+        for p in root.rglob("*.ko"):
+            staged.setdefault(canon(p.name), p)
+    # Prefer an in-tree GKI module so upstream binaries are compared to the kernel image release.
+    baseline = staged.get("mac80211") or staged.get("cfg80211") or staged.get("rtl8xxxu") or staged.get("qca_cld3_wlan")
     if baseline is None:
         baseline = next(iter(staged.values()), None)
     if baseline is None:
