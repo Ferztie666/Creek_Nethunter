@@ -193,12 +193,14 @@ fi
   echo "Status report: MODULE-STATUS.txt"
   echo
   echo "[driver]"
+  if [ "${WANT[mac80211]:-}" = driver ]; then
+    printf '%s\n' 'mac80211.ko'
+  fi
   for n in "${!WANT[@]}"; do
-    if [ "${WANT[$n]}" = driver ]; then
+    if [ "${WANT[$n]}" = driver ] && [ "$n" != mac80211 ]; then
       printf '%s\n' "$n.ko"
     fi
   done | sort
-  echo
   echo "[dependency]"
   for n in "${!WANT[@]}"; do
     if [ "${WANT[$n]}" = dependency ]; then
@@ -207,6 +209,12 @@ fi
   done | sort
 } > "$OUT/MODULE-MANIFEST.txt"
 
-find "$OUT" -maxdepth 1 -type f -name '*.ko' -printf '%f\n' | sort > "$OUT/MODULE-LIST.txt"
+{
+  # Keep the requested mac80211 foundation visible first in the manifest.
+  # nhd still resolves cfg80211 and other real dependencies before loading.
+  if [ -s "$OUT/mac80211.ko" ]; then printf '%s\n' 'mac80211.ko'; fi
+  find "$OUT" -maxdepth 1 -type f -name '*.ko' -printf '%f\n' |
+    grep -vx 'mac80211.ko' | sort
+} > "$OUT/MODULE-LIST.txt"
 sort -u "$STATUS" -o "$STATUS"
 printf 'ADAPTER_PACKAGE=PASS\nDRIVER_MODULES=%s\nDEPENDENCY_MODULES=%s\n' "$driver_count" "$dependency_count"
