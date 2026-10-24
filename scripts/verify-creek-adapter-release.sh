@@ -41,7 +41,7 @@ for root in "${MODULE_ROOTS[@]}"; do
     fi
   done < <(find "$root" -type f -name '*.ko' -print0 | sort -z)
 done
-[[ "$count" -gt 0 ]] || die "no .ko files found under $MODROOT"
+[[ "$count" -gt 0 ]] || die "no .ko files found under any audited module root: ${MODULE_ROOTS[*]}"
 if [[ "$bad" -gt 0 ]]; then
   echo "ERROR: $bad of $count staged modules do not match expected release $EXPECTED" >&2
   grep -E 'FAIL_' "$REPORT" >&2 || true
