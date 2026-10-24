@@ -401,21 +401,20 @@ jobs:
           # device's stock WLAN module ABI, vermagic, symbol dependencies and load path
           # have been verified on the exact Android 16 build.
           mkdir -p artifacts/internal-wlan
-          # The pinned QCACLD source builds its module as wlan.ko in this exact
-          # vendor path. Preserve the source output name; never rename it to imply
-          # a different module identity.
-          QCA_MODULE="$(find "$OUT_DIR/staging/lib/modules" -type f -path '*/vendor/qcom/opensource/wlan/qcacld-3.0/wlan.ko' -print -quit)"
+          # creek-external-modules.mk normalizes the built QCACLD source output
+          # to the expected internal module name after successful compilation.
+          QCA_MODULE="$(find "$OUT_DIR/staging/lib/modules" -type f -path '*/vendor/qcom/opensource/wlan/qcacld-3.0/qca_cld3_wlan.ko' -print -quit)"
           test -n "$QCA_MODULE" && test -s "$QCA_MODULE"
-          cp "$QCA_MODULE" artifacts/internal-wlan/wlan.ko
+          cp "$QCA_MODULE" artifacts/internal-wlan/qca_cld3_wlan.ko
           {
             echo "Creek internal Qualcomm WLAN module - AUDIT/TEST ONLY"
-            echo "Module: wlan.ko (original QCACLD source output name)"
+            echo "Module: qca_cld3_wlan.ko (built QCACLD output, normalized by the module wrapper)"
             echo "Purpose: patched QCACLD driver for internal WLAN (wlan0), not USB adapters"
             echo "Status: NOT FLASH-READY; device-side ABI/KMI, vermagic, symbols, dependencies and module load path are unverified"
             echo "Do not replace or unload the stock Qualcomm WLAN driver on a daily-use device."
             echo "Do not force con_mode or unload WLAN at boot."
           } > artifacts/internal-wlan/INSTALL-GATE.txt
-          (cd artifacts/internal-wlan && sha256sum -- wlan.ko > SHA256SUMS)
+          (cd artifacts/internal-wlan && sha256sum -- qca_cld3_wlan.ko > SHA256SUMS)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-gki-candidate.zip release)
           (cd artifacts && zip -r9 -q ../Creek-Nethunter-internal-wlan-audit.zip internal-wlan)
           unzip -tq Creek-Nethunter-gki-candidate.zip
