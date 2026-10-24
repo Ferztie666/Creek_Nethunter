@@ -38,9 +38,9 @@ jobs:
       VARIANT: gki
       LTO: thin
       # Match the original developer kernel/adapter package release exactly.
-      # CRC and dependency checks still decide whether each upstream .ko is safe.
-      # Makefile already contributes -android13-8; append only the developer suffix.
-      LOCALVERSION: -gbf0a81a7f319-dirty
+      # The final build log showed LOCALVERSION did not include android13-8;
+      # pass the full suffix explicitly so kernelrelease/vermagic agree.
+      LOCALVERSION: -android13-8-gbf0a81a7f319-dirty
       EXPECTED_KERNEL_RELEASE: 5.15.167-android13-8-gbf0a81a7f319-dirty
       SKIP_MRPROPER: ${{ github.event_name == 'workflow_dispatch' && inputs.clean == false && '1' || '0' }}
       KERNEL_CMDLINE_CONSOLE_AUTO: "0"
