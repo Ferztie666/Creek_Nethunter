@@ -266,7 +266,7 @@ done
 # GKI_ENVIRON array; without this entry the .ko vermagic collapses to 5.15.167.
 if grep -q 'GKI_ENVIRON+=(\"EXT_MODULES=\")' "$REAL_BUILD_SH"; then
   if ! grep -q 'creek_localversion_forward_fix' "$REAL_BUILD_SH"; then
-    sed -i '/GKI_ENVIRON+=(\"EXT_MODULES=\")/a\\  GKI_ENVIRON+=("LOCALVERSION=${LOCALVERSION:-}") # creek_localversion_forward_fix' "$REAL_BUILD_SH"
+    sed -i '/GKI_ENVIRON+=("EXT_MODULES=")/a\  GKI_ENVIRON+=("LOCALVERSION=${LOCALVERSION:-}") # creek_localversion_forward_fix' "$REAL_BUILD_SH"
   fi
 else
   echo "ERROR: cannot locate GKI_ENVIRON EXT_MODULES anchor for LOCALVERSION forwarding" >&2
