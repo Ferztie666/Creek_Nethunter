@@ -243,7 +243,7 @@ jobs:
           # Fail closed if build.config/Kbuild drops the localversion. The previous
           # build produced vermagic 5.15.167 only, so every original adapter .ko was
           # rejected before symbol-CRC checking. Never package a shortened release.
-          bash scripts/verify-creek-adapter-release.sh "$OUT_DIR/staging" "$EXPECTED_KERNEL_RELEASE" "$GITHUB_WORKSPACE/artifacts/logs/module-release-audit.txt"
+          bash "$GITHUB_WORKSPACE/scripts/verify-creek-adapter-release.sh" "$OUT_DIR/staging" "$EXPECTED_KERNEL_RELEASE" "$GITHUB_WORKSPACE/artifacts/logs/module-release-audit.txt"
           # Never package a candidate if the build scripts changed or bypassed
           # the authoritative ABI checker during compilation.
           ABI_CHECKER=""
