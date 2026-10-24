@@ -64,12 +64,13 @@ for f in "$OUT/msm-kernel/Module.symvers" "$OUT/gki_kernel/common/Module.symvers
 done
 test -n "$SYMVERS" || die "no Module.symvers/vmlinux.symvers produced"
 
-# Vendor WLAN module is required; do not accept a generic renamed replacement.
+# The pinned QCACLD source emits wlan.ko at this exact vendor path.
+# Do not require a fabricated/renamed qca_cld3_wlan.ko filename.
 WLAN=""
 while IFS= read -r f; do
   WLAN="$f"; break
-done < <(find "$OUT/staging" -type f -name 'qca_cld3_wlan.ko' 2>/dev/null)
-test -n "$WLAN" || die "qca_cld3_wlan.ko not built"
+done < <(find "$OUT/staging" -type f -path '*/vendor/qcom/opensource/wlan/qcacld-3.0/wlan.ko' 2>/dev/null)
+test -n "$WLAN" || die "QCACLD source output wlan.ko missing from its expected vendor path"
 
 # Every built module must report the same kernel release/CRC metadata.
 modinfo_bin="$(command -v modinfo || true)"
