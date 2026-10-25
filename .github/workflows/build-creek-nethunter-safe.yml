@@ -128,7 +128,7 @@ jobs:
             echo "Unexpected pre-existing ABI bypass before preparation" >&2
             exit 1
           }
-          scripts/prepare-creek-stock.sh "$KP"
+          bash scripts/prepare-creek-stock.sh "$KP"
           # The preparation script must never rewrite or bypass the ABI checker.
           # Treat any marker as a hard failure before compilation.
           if grep -qE 'BUT WHO CARES?|ABI_BYPASS|abi-bypass' "$ABI_BEFORE"; then
