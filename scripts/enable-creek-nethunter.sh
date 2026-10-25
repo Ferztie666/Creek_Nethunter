@@ -182,6 +182,11 @@ echo "[nethunter] reviewed additive ABI symbols present=${#CREEK_NETHUNTER_ABI_S
 # pinned upstream source. If a requested external module fails the real KMI
 # gate, treat that as a compatibility failure and resolve it explicitly rather
 # than disabling the gate or broadening exports speculatively.
+EXPECTED_KERNEL_RELEASE="${EXPECTED_KERNEL_RELEASE:?EXPECTED_KERNEL_RELEASE must be set}"
+case "$EXPECTED_KERNEL_RELEASE" in
+  5.15.167-*) CREEK_LOCALVERSION_SUFFIX="${EXPECTED_KERNEL_RELEASE#5.15.167}" ;;
+  *) echo "ERROR: unexpected pinned kernel release: $EXPECTED_KERNEL_RELEASE" >&2; exit 1 ;;
+esac
 : > "$NETHUNTER_CONFIG"
 CFG="$COMMON/scripts/config --file $NETHUNTER_CONFIG"
 
