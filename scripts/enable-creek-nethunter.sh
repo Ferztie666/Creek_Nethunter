@@ -188,7 +188,7 @@ CFG="$COMMON/scripts/config --file $NETHUNTER_CONFIG"
 # DroidSpaces/container support + ABI-safe SYSVIPC patches above.
 $CFG \
   -d CONFIG_LOCALVERSION_AUTO \
-  --set-str CONFIG_LOCALVERSION "" \
+  --set-str CONFIG_LOCALVERSION "${CREEK_LOCALVERSION_SUFFIX:?CREEK_LOCALVERSION_SUFFIX must be set}" \
   -e CONFIG_SYSVIPC \
   -e CONFIG_DEVTMPFS \
   -e CONFIG_PID_NS \
@@ -496,6 +496,16 @@ merge_nethunter_config() {
   read -r -a nh_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a nh_make_args <<< "${MAKE_ARGS:-}"
   (cd "${KERNEL_DIR}" && make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" olddefconfig)
+  # Verify the resolved release before compiling. The suffix is config-driven, not
+  # dependent on a shell variable silently dropped by Android build.sh.
+  local expected_release="${EXPECTED_KERNEL_RELEASE:?EXPECTED_KERNEL_RELEASE must be set}"
+  local actual_release
+  actual_release="$(cd "${KERNEL_DIR}" && env -u LOCALVERSION make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" -s kernelrelease)"
+  if [[ "$actual_release" != "$expected_release" ]]; then
+    echo "ERROR: resolved kernelrelease mismatch: expected=$expected_release actual=$actual_release" >&2
+    return 1
+  fi
+  echo "[nethunter] KERNELRELEASE verified before build: $actual_release"
 
   # Keep the GKI allow-list tied to the FINAL resolved config. Optional
   # upstream drivers are enabled only if this pinned source contains their

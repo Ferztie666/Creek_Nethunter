@@ -261,18 +261,10 @@ p.write_text(s)
 PY_BUILD_UTILS
 done
 
-# Forward the exact LOCALVERSION into the recursive inner GKI build.
-# The workflow environment had the right value, but build.sh passes a curated
-# GKI_ENVIRON array; without this entry the .ko vermagic collapses to 5.15.167.
-if grep -q 'GKI_ENVIRON+=(\"EXT_MODULES=\")' "$REAL_BUILD_SH"; then
-  if ! grep -q 'creek_localversion_forward_fix' "$REAL_BUILD_SH"; then
-    sed -i '/GKI_ENVIRON+=("EXT_MODULES=")/a\  GKI_ENVIRON+=("LOCALVERSION=${LOCALVERSION:-}") # creek_localversion_forward_fix' "$REAL_BUILD_SH"
-  fi
-else
-  echo "ERROR: cannot locate GKI_ENVIRON EXT_MODULES anchor for LOCALVERSION forwarding" >&2
-  exit 1
-fi
-
+# Do not patch build.sh to forward LOCALVERSION: Android build.sh uses a curated
+# environment and the previous patch did not change the resulting module vermagic.
+# The exact release suffix is now set in CONFIG_LOCALVERSION and asserted by
+# enable-creek-nethunter.sh before compilation.
 # QCOM DTs are out-of-tree in Xiaomi's kernel_devicetree repo.
 # arch/arm64/boot/dts/Makefile only descends into vendor/ when vendor/Makefile exists.
 # Without this, dtbs_install creates no dtb_staging directory and build.sh fails in install_dtbs.
