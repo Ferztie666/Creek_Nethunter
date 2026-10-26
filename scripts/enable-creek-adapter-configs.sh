@@ -263,8 +263,19 @@ creek_nethunter_apply_adapter_config() {
   read -r -a adapter_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a adapter_make_args <<< "${MAKE_ARGS:-}"
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
+
+  # Xiaomi's build wrapper may leave a generated .scmversion in the MSM object
+  # tree. Kbuild gives that file precedence over CONFIG_LOCALVERSION and then
+  # reports a git-derived release (for example 5.15.167-g<sha>-dirty), even
+  # though .config contains the pinned developer suffix. Remove only this
+  # generated object-tree metadata after olddefconfig, then verify the release
+  # that the following module build will actually use. Never rewrite vermagic.
+  if [[ -e "${OUT_DIR}/.scmversion" ]]; then
+    echo "[creek-nethunter] removing generated MSM object-tree .scmversion to honor CONFIG_LOCALVERSION"
+    rm -f "${OUT_DIR}/.scmversion"
+  fi
   local actual_release
-  actual_release="$(cd "${kernel_dir}" && env -u LOCALVERSION make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease)"
+  actual_release="$(cd "${kernel_dir}" && env -u LOCALVERSION -u KERNELRELEASE make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease)"
   if [[ "${actual_release}" != "${expected_release}" ]]; then
     echo "ERROR: MSM/vendor kernelrelease mismatch: expected=${expected_release} actual=${actual_release}" >&2
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
