@@ -242,6 +242,20 @@ creek_nethunter_apply_adapter_config() {
   test -s "${config_file}" || { echo "ERROR: MSM .config missing before adapter merge" >&2; return 1; }
   test -s "${fragment}" || { echo "ERROR: adapter fragment missing: ${fragment}" >&2; return 1; }
   KCONFIG_CONFIG="${config_file}" "${kernel_dir}/scripts/kconfig/merge_config.sh" -y -m "${config_file}" "${fragment}"
+
+  # The vendor/MSM domain builds its own modules. Previously only the inner GKI
+  # config received CONFIG_LOCALVERSION, so MSM-staged modules carried vermagic
+  # "5.15.167" while the checked kernelrelease claimed the full developer suffix.
+  # Align this config domain too; never weaken the post-build vermagic gate.
+  local expected_release="${EXPECTED_KERNEL_RELEASE:?EXPECTED_KERNEL_RELEASE must be set for release verification}"
+  local base_release="${expected_release%%-*}"
+  local release_suffix="${expected_release#"${base_release}"}"
+  if [[ "${base_release}" != "5.15.167" || -z "${release_suffix}" ]]; then
+    echo "ERROR: unexpected Creek release format: ${expected_release}" >&2
+    return 1
+  fi
+  "${kernel_dir}/scripts/config" --file "${config_file}" -d CONFIG_LOCALVERSION_AUTO --set-str CONFIG_LOCALVERSION "${release_suffix}"
+
   # Force-disable the optional GSI function after all fragments. The pinned
   # usb_f_gsi.ko has unresolved RNDIS API references and makes depmod fatal.
   "${kernel_dir}/scripts/config" --file "${config_file}" -d CONFIG_USB_F_GSI -d CONFIG_USB_CONFIGFS_F_GSI
@@ -249,6 +263,14 @@ creek_nethunter_apply_adapter_config() {
   read -r -a adapter_tool_args <<< "${TOOL_ARGS:-}"
   read -r -a adapter_make_args <<< "${MAKE_ARGS:-}"
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
+  local actual_release
+  actual_release="$(cd "${kernel_dir}" && env -u LOCALVERSION make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease)"
+  if [[ "${actual_release}" != "${expected_release}" ]]; then
+    echo "ERROR: MSM/vendor kernelrelease mismatch: expected=${expected_release} actual=${actual_release}" >&2
+    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
+    return 1
+  fi
+  echo "[creek-nethunter] MSM/vendor KERNELRELEASE verified: ${actual_release}"
   # Verify resolved config after Kconfig dependency processing, not just the fragment.
   if ! grep -Eq "^CONFIG_MAC80211=m$" "${config_file}"; then
     echo "ERROR: audited USB-WLAN baseline CONFIG_MAC80211=m did not survive olddefconfig" >&2
