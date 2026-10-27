@@ -270,7 +270,65 @@ creek_nethunter_apply_adapter_config() {
   "${kernel_dir}/scripts/config" --file "${config_file}" \
     -d CONFIG_LOCALVERSION_AUTO --set-str CONFIG_LOCALVERSION "${release_suffix}"
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
-  if grep -Eq '^CONFIG_LOCALVERSION_AUTO=y  actual_release="$(cd "${kernel_dir}" && env -u LOCALVERSION -u KERNELRELEASE make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease)"
+  if grep -Eq '^CONFIG_LOCALVERSION_AUTO=y
+    echo "ERROR: MSM/vendor kernelrelease mismatch: expected=${expected_release} actual=${actual_release}" >&2
+    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
+    return 1
+  fi
+  echo "[creek-nethunter] MSM/vendor KERNELRELEASE verified: ${actual_release}"
+  # Verify resolved config after Kconfig dependency processing, not just the fragment.
+  if ! grep -Eq "^CONFIG_MAC80211=m$" "${config_file}"; then
+    echo "ERROR: audited USB-WLAN baseline CONFIG_MAC80211=m did not survive olddefconfig" >&2
+    grep -E "^CONFIG_(MAC80211|CFG80211|MAC80211_LEDS|MAC80211_RC_MINSTREL)=" "${config_file}" >&2 || true
+    return 1
+  fi
+  if grep -Eq "^CONFIG_MAC80211_LEDS=(y|m)$" "${config_file}"; then
+    echo "ERROR: CONFIG_MAC80211_LEDS is enabled but led_trigger_blink is not exported by the pinned KMI" >&2
+    grep -n "^CONFIG_MAC80211_LEDS=" "${config_file}" >&2 || true
+    return 1
+  fi
+  for symbol in NET_NSH OPENVSWITCH VXLAN GENEVE BATMAN_ADV NFC_DIGITAL NFC_NCI NFC_HCI NFC_SHDLC NFC_LLCP NFC_PN533 NFC_PN533_USB; do
+    if grep -Eq "^CONFIG_${symbol}=(y|m)$" "${config_file}"; then
+      echo "ERROR: known KMI-incompatible optional module CONFIG_${symbol} was re-enabled after olddefconfig" >&2
+      grep -n "^CONFIG_${symbol}=" "${config_file}" >&2 || true
+      return 1
+    fi
+  done
+  echo "[creek-nethunter] post-defconfig KMI-risk audit passed: MAC80211=m, LED hook and known failing networking/NFC child modules disabled"
+  if grep -Eq "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=(y|m)$" "${config_file}"; then
+    echo "ERROR: broken GSI gadget remains enabled after config merge" >&2
+    grep -E "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=" "${config_file}" >&2 || true
+    return 1
+  fi
+  echo "[creek-nethunter] adapter fragment merged; broken GSI gadget disabled"
+}
+POST_DEFCONFIG_CMDS="__POST_COMMANDS__"
+"""
+s=s.replace("__POST_COMMANDS__", post)
+p.write_text(s)
+PY_BUILD_CONFIG
+ "${config_file}"; then
+    echo "ERROR: CONFIG_LOCALVERSION_AUTO remains enabled in MSM config" >&2
+    return 1
+  fi
+  if ! grep -qxF "CONFIG_LOCALVERSION=\"${release_suffix}\"" "${config_file}"; then
+    echo "ERROR: MSM CONFIG_LOCALVERSION does not match pinned suffix ${release_suffix}" >&2
+    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
+    return 1
+  fi
+  for scm_file in "${kernel_dir}/.scmversion" "${OUT_DIR}/.scmversion"; do
+    if [[ -f "${scm_file}" ]]; then
+      rel_scm="${scm_file#"${kernel_dir}/"}"
+      if git -C "${kernel_dir}" ls-files --error-unmatch -- "${rel_scm}" >/dev/null 2>&1; then
+        echo "ERROR: refusing to remove tracked Kbuild metadata: ${scm_file}" >&2
+        return 1
+      fi
+      echo "[creek-nethunter] removing generated .scmversion: ${scm_file}"
+      rm -f -- "${scm_file}"
+    fi
+  done
+  local actual_release
+  actual_release="$(cd "${kernel_dir}" && env -u LOCALVERSION -u KERNELRELEASE make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease)"
   if [[ "${actual_release}" != "${expected_release}" ]]; then
     echo "ERROR: MSM/vendor kernelrelease mismatch: expected=${expected_release} actual=${actual_release}" >&2
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
