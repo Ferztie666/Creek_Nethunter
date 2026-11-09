@@ -274,7 +274,7 @@ creek_nethunter_apply_adapter_config() {
     echo "ERROR: CONFIG_LOCALVERSION_AUTO remains enabled in MSM config" >&2
     return 1
   fi
-  actual_localversion="$(sed -n 's/^CONFIG_LOCALVERSION="\\(.*\\)"$/\\1/p' "${config_file}")"
+  actual_localversion="$(grep '^CONFIG_LOCALVERSION=' "${config_file}" | cut -d '"' -f2)"
   if [[ "${actual_localversion}" != "${release_suffix}" ]]; then
     echo "ERROR: MSM CONFIG_LOCALVERSION does not match pinned suffix ${release_suffix}" >&2
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
