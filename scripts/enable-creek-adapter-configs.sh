@@ -292,11 +292,22 @@ creek_nethunter_apply_adapter_config() {
       rm -f -- "${scm_file}"
     fi
   done
+  # Kbuild's kernelrelease reads include/config/auto.conf, not .config.
+  # olddefconfig may leave generated config metadata stale when the output tree
+  # has been reused by the mixed GKI/MSM build. Regenerate prepare metadata before
+  # asking Kbuild for the release; never infer kernelrelease from .config alone.
+  make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" prepare
+  local auto_config="${OUT_DIR}/include/config/auto.conf"
+  if [[ ! -s "${auto_config}" ]] || ! grep -Fqx "CONFIG_LOCALVERSION=\"${release_suffix}\"" "${auto_config}"; then
+    echo "ERROR: generated MSM auto.conf does not contain the pinned CONFIG_LOCALVERSION" >&2
+    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
+    return 1
+  fi
   local actual_release
   actual_release="$(cd "${kernel_dir}" && env -u LOCALVERSION -u KERNELRELEASE make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease)"
   if [[ "${actual_release}" != "${expected_release}" ]]; then
-    echo "ERROR: MSM/vendor kernelrelease mismatch: expected=${expected_release} actual=${actual_release}" >&2
-    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
+    echo "ERROR: MSM/vendor kernelrelease mismatch after Kbuild prepare: expected=${expected_release} actual=${actual_release}" >&2
+    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
     return 1
   fi
   echo "[creek-nethunter] MSM/vendor KERNELRELEASE verified: ${actual_release}"
