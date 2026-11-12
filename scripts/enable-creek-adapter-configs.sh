@@ -280,40 +280,40 @@ creek_nethunter_apply_adapter_config() {
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
     return 1
   fi
-  # Remove only generated .scmversion files; never remove tracked source metadata.
-  for scm_file in "${kernel_dir}/.scmversion" "${OUT_DIR}/.scmversion"; do
-    if [[ -f "${scm_file}" ]]; then
-      rel_scm="${scm_file#"${kernel_dir}/"}"
-      if git -C "${kernel_dir}" ls-files --error-unmatch -- "${rel_scm}" >/dev/null 2>&1; then
-        echo "ERROR: refusing to remove tracked Kbuild metadata: ${scm_file}" >&2
-        return 1
-      fi
-      echo "[creek-nethunter] removing generated .scmversion: ${scm_file}"
-      rm -f -- "${scm_file}"
+  # The QCACLD safety patch intentionally modifies a tracked source file in
+  # the synced MSM project. Kbuild's SCM suffix therefore adds '+' even though
+  # CONFIG_LOCALVERSION_AUTO is disabled. Pin SCM suffix generation explicitly
+  # for this release audit using Kbuild's supported .scmversion override.
+  # Never overwrite tracked metadata; the empty override is temporary and is
+  # removed even when prepare/kernelrelease fails.
+  local scm_override="${kernel_dir}/.scmversion"
+  if [[ -e "${scm_override}" ]]; then
+    if git -C "${kernel_dir}" ls-files --error-unmatch -- .scmversion >/dev/null 2>&1; then
+      echo "ERROR: refusing to overwrite tracked Kbuild metadata: ${scm_override}" >&2
+      return 1
     fi
-  done
-  # Kbuild's kernelrelease reads include/config/auto.conf, not .config.
-  # olddefconfig may leave generated config metadata stale when the output tree
-  # has been reused by the mixed GKI/MSM build. Regenerate prepare metadata before
-  # asking Kbuild for the release; never infer kernelrelease from .config alone.
-  make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" prepare
+    rm -f -- "${scm_override}"
+  fi
   local auto_config="${OUT_DIR}/include/config/auto.conf"
-  if [[ ! -s "${auto_config}" ]]; then
-    echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
-    return 1
-  fi
-  # Kconfig writes CONFIG_LOCALVERSION as a quoted string in both .config and
-  # auto.conf. Extract the value rather than comparing shell/grep quote syntax.
-  local config_localversion auto_localversion
-  config_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${config_file}")"
-  auto_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${auto_config}")"
-  if [[ "${config_localversion}" != "${release_suffix}" || "${auto_localversion}" != "${release_suffix}" ]]; then
-    echo "ERROR: MSM LOCALVERSION mismatch: expected='${release_suffix}' config='${config_localversion:-missing}' auto.conf='${auto_localversion:-missing}'" >&2
-    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
-    return 1
-  fi
-  local actual_release
-  actual_release="$(cd "${kernel_dir}" && env -u LOCALVERSION -u KERNELRELEASE make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease)"
+  local config_localversion auto_localversion actual_release
+  actual_release="$(
+    set -euo pipefail
+    trap 'rm -f -- "${scm_override}"' EXIT
+    : > "${scm_override}"
+    make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" prepare >/dev/null
+    if [[ ! -s "${auto_config}" ]]; then
+      echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
+      exit 1
+    fi
+    config_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${config_file}")"
+    auto_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${auto_config}")"
+    if [[ "${config_localversion}" != "${release_suffix}" || "${auto_localversion}" != "${release_suffix}" ]]; then
+      echo "ERROR: MSM LOCALVERSION mismatch: expected='${release_suffix}' config='${config_localversion:-missing}' auto.conf='${auto_localversion:-missing}'" >&2
+      grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
+      exit 1
+    fi
+    env -u LOCALVERSION -u KERNELRELEASE make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease
+  )"
   if [[ "${actual_release}" != "${expected_release}" ]]; then
     echo "ERROR: MSM/vendor kernelrelease mismatch after Kbuild prepare: expected=${expected_release} actual=${actual_release}" >&2
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
