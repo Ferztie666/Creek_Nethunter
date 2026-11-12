@@ -305,8 +305,8 @@ creek_nethunter_apply_adapter_config() {
   # Kconfig writes CONFIG_LOCALVERSION as a quoted string in both .config and
   # auto.conf. Extract the value rather than comparing shell/grep quote syntax.
   local config_localversion auto_localversion
-  config_localversion="$(sed -n 's/^CONFIG_LOCALVERSION="\\([^"]*\\)"/\\1/p' "${config_file}")"
-  auto_localversion="$(sed -n 's/^CONFIG_LOCALVERSION="\\([^"]*\\)"/\\1/p' "${auto_config}")"
+  config_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${config_file}")"
+  auto_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${auto_config}")"
   if [[ "${config_localversion}" != "${release_suffix}" || "${auto_localversion}" != "${release_suffix}" ]]; then
     echo "ERROR: MSM LOCALVERSION mismatch: expected='${release_suffix}' config='${config_localversion:-missing}' auto.conf='${auto_localversion:-missing}'" >&2
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
