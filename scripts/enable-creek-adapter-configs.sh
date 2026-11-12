@@ -298,8 +298,17 @@ creek_nethunter_apply_adapter_config() {
   # asking Kbuild for the release; never infer kernelrelease from .config alone.
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" prepare
   local auto_config="${OUT_DIR}/include/config/auto.conf"
-  if [[ ! -s "${auto_config}" ]] || ! grep -Fqx "CONFIG_LOCALVERSION=\"${release_suffix}\"" "${auto_config}"; then
-    echo "ERROR: generated MSM auto.conf does not contain the pinned CONFIG_LOCALVERSION" >&2
+  if [[ ! -s "${auto_config}" ]]; then
+    echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
+    return 1
+  fi
+  # Kconfig writes CONFIG_LOCALVERSION as a quoted string in both .config and
+  # auto.conf. Extract the value rather than comparing shell/grep quote syntax.
+  local config_localversion auto_localversion
+  config_localversion="$(sed -n 's/^CONFIG_LOCALVERSION="\\([^"]*\\)"/\\1/p' "${config_file}")"
+  auto_localversion="$(sed -n 's/^CONFIG_LOCALVERSION="\\([^"]*\\)"/\\1/p' "${auto_config}")"
+  if [[ "${config_localversion}" != "${release_suffix}" || "${auto_localversion}" != "${release_suffix}" ]]; then
+    echo "ERROR: MSM LOCALVERSION mismatch: expected='${release_suffix}' config='${config_localversion:-missing}' auto.conf='${auto_localversion:-missing}'" >&2
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
     return 1
   fi
