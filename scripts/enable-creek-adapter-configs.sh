@@ -288,11 +288,8 @@ creek_nethunter_apply_adapter_config() {
   # removed even when prepare/kernelrelease fails.
   local scm_override="${kernel_dir}/.scmversion"
   if [[ -e "${scm_override}" ]]; then
-    if git -C "${kernel_dir}" ls-files --error-unmatch -- .scmversion >/dev/null 2>&1; then
-      echo "ERROR: refusing to overwrite tracked Kbuild metadata: ${scm_override}" >&2
-      return 1
-    fi
-    rm -f -- "${scm_override}"
+    echo "ERROR: pre-existing Kbuild SCM metadata requires explicit review; refusing to overwrite: ${scm_override}" >&2
+    return 1
   fi
   local auto_config="${OUT_DIR}/include/config/auto.conf"
   local config_localversion auto_localversion actual_release
