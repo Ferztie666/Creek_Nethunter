@@ -309,7 +309,7 @@ creek_nethunter_apply_adapter_config() {
       grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
       exit 1
     fi
-    env -u LOCALVERSION -u KERNELRELEASE make "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease
+    env -u LOCALVERSION -u KERNELRELEASE make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease
   )"
   if [[ "${actual_release}" != "${expected_release}" ]]; then
     echo "ERROR: MSM/vendor kernelrelease mismatch after Kbuild prepare: expected=${expected_release} actual=${actual_release}" >&2
