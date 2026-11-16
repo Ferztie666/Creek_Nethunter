@@ -40,28 +40,21 @@ disable_old = """int hdd_disable_monitor_mode(struct net_device *dev)
 \tvoid *soc = cds_get_context(QDF_MODULE_ID_SOC);
 \tuint8_t vdev_id;
 \tint ret;
-#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tstruct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
-#endif
 
 \thdd_enter_dev(dev);"""
 disable_new = """int hdd_disable_monitor_mode(struct net_device *dev)
 {
 \tvoid *soc;
 \tint ret;
-#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tstruct hdd_adapter *adapter;
-#endif
 
 \tif (!dev)
 \t\treturn -EINVAL;
 \tsoc = cds_get_context(QDF_MODULE_ID_SOC);
 \tif (!soc)
 \t\treturn -EINVAL;
-#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tadapter = WLAN_HDD_GET_PRIV_PTR(dev);
-#endif
-
 \thdd_enter_dev(dev);"""
 def replace_one(text, old, new, label):
     n = text.count(old)
