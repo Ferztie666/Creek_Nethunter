@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-KP="\${1:?usage: patch-creek-qcacld-monitor.sh <kernel_platform> <repo_root>}"
-REPO_ROOT="\${2:?repository root required}"
+KP="${1:?usage: patch-creek-qcacld-monitor.sh <kernel_platform> <repo_root>}"
+REPO_ROOT="${2:?repository root required}"
 MON="$KP/vendor/qcom/opensource/wlan/qcacld-3.0/core/hdd/src/wlan_hdd_rx_monitor.c"
 test -s "$MON" || { echo "ERROR: QCACLD monitor source missing: $MON" >&2; exit 1; }
 python3 - "$MON" <<'PY'
