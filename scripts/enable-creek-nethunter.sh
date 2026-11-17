@@ -504,8 +504,19 @@ merge_nethunter_config() {
   # Verify the resolved release before compiling. The suffix is config-driven, not
   # dependent on a shell variable silently dropped by Android build.sh.
   local expected_release="${EXPECTED_KERNEL_RELEASE:?EXPECTED_KERNEL_RELEASE must be set}"
+  local expected_suffix="${expected_release#5.15.167}"
+  local configured_suffix
+  configured_suffix="$(sed -n 's/^CONFIG_LOCALVERSION="\\(.*\\)"$/\\1/p' "${config_file}" | head -n1)"
+  if [[ "$configured_suffix" != "$expected_suffix" ]]; then
+    echo "ERROR: final .config LOCALVERSION mismatch: expected=$expected_suffix actual=$configured_suffix" >&2
+    return 1
+  fi
+  if [[ "${LOCALVERSION:-}" != "$expected_suffix" ]]; then
+    echo "ERROR: inner GKI LOCALVERSION was not forwarded: expected=$expected_suffix actual=${LOCALVERSION:-<unset>}" >&2
+    return 1
+  fi
   local actual_release
-  actual_release="$(cd "${KERNEL_DIR}" && env -u LOCALVERSION make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" -s kernelrelease)"
+  actual_release="$(cd "${KERNEL_DIR}" && LOCALVERSION="$expected_suffix" make "${nh_tool_args[@]}" O="${OUT_DIR}" "${nh_make_args[@]}" -s kernelrelease)"
   if [[ "$actual_release" != "$expected_release" ]]; then
     echo "ERROR: resolved kernelrelease mismatch: expected=$expected_release actual=$actual_release" >&2
     return 1
