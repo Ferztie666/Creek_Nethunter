@@ -287,16 +287,29 @@ creek_nethunter_apply_adapter_config() {
   # Never overwrite tracked metadata; the empty override is temporary and is
   # removed even when prepare/kernelrelease fails.
   local scm_override="${kernel_dir}/.scmversion"
-  if [[ -e "${scm_override}" ]]; then
-    echo "ERROR: pre-existing Kbuild SCM metadata requires explicit review; refusing to overwrite: ${scm_override}" >&2
-    return 1
+  local scm_override_owned=0
+  # The workflow owns empty .scmversion markers for the complete build so
+  # both common/GKI and MSM/vendor Kbuild trees keep a stable release string.
+  # Reuse only that exact safe form: never follow symlinks, truncate non-empty
+  # metadata, or replace a directory/other file type.
+  if [[ -e "${scm_override}" || -L "${scm_override}" ]]; then
+    if [[ -L "${scm_override}" || ! -f "${scm_override}" || -s "${scm_override}" ]]; then
+      echo "ERROR: unsafe pre-existing Kbuild SCM metadata; expected an empty regular workflow-owned marker: ${scm_override}" >&2
+      return 1
+    fi
+    echo "[creek-nethunter] reusing workflow-owned empty SCM override: ${scm_override}"
+  else
+    : > "${scm_override}"
+    scm_override_owned=1
+    echo "[creek-nethunter] created temporary empty SCM override: ${scm_override}"
   fi
   local auto_config="${OUT_DIR}/include/config/auto.conf"
   local config_localversion auto_localversion actual_release
   actual_release="$(
     set -euo pipefail
-    trap 'rm -f -- "${scm_override}"' EXIT
-    : > "${scm_override}"
+    if [[ "${scm_override_owned}" == "1" ]]; then
+      trap 'rm -f -- "${scm_override}"' EXIT
+    fi
     make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" prepare >/dev/null
     if [[ ! -s "${auto_config}" ]]; then
       echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
