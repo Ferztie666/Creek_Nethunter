@@ -40,7 +40,11 @@ jobs:
       # Match the original developer kernel/adapter package release exactly.
       # The final build log showed LOCALVERSION did not include android13-8;
       # pass the full suffix explicitly so kernelrelease/vermagic agree.
+      # The outer MSM build reads LOCALVERSION; MiCode build.sh starts the
+      # inner GKI build with env -i and forwards only GKI_* variables.
+      # Keep both release suffixes identical so vendor and GKI .ko vermagic match.
       LOCALVERSION: -android13-8-gbf0a81a7f319-dirty
+      GKI_LOCALVERSION: -android13-8-gbf0a81a7f319-dirty
       EXPECTED_KERNEL_RELEASE: 5.15.167-android13-8-gbf0a81a7f319-dirty
       SKIP_MRPROPER: ${{ github.event_name == 'workflow_dispatch' && inputs.clean == false && '1' || '0' }}
       KERNEL_CMDLINE_CONSOLE_AUTO: "0"
@@ -218,8 +222,15 @@ jobs:
           export BUILD_CONFIG VARIANT LTO SKIP_MRPROPER KERNEL_CMDLINE_CONSOLE_AUTO
           export EXT_MODULES_MAKEFILE CREEK_DIST_DIR MODULES_LIST MODULES_RECOVERY_LIST
           export EXPECTED_KERNEL_RELEASE
-          # CONFIG_LOCALVERSION is the single source of truth for the kernel release.
-          unset LOCALVERSION
+          # MiCode's mixed build uses env -i for its inner GKI build.
+          # LOCALVERSION is consumed by the outer MSM build; GKI_LOCALVERSION is
+          # forwarded by build.sh as LOCALVERSION to the inner GKI build.
+          expected_suffix="${EXPECTED_KERNEL_RELEASE#5.15.167}"
+          if [[ "${LOCALVERSION:-}" != "$expected_suffix" || "${GKI_LOCALVERSION:-}" != "$expected_suffix" ]]; then
+            echo "ERROR: outer/inner LOCALVERSION must both equal expected suffix: $expected_suffix" >&2
+            exit 1
+          fi
+          export LOCALVERSION GKI_LOCALVERSION
           export BUILD_VENDOR_BOOT_IMG VENDOR_RAMDISK_BINARY
           # The QCACLD patch dirties the source trees. Kbuild would otherwise
           # append '+', so pin SCM suffix generation for the entire build,
