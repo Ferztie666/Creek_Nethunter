@@ -15,9 +15,9 @@ enable_old = """int hdd_enable_monitor_mode(struct net_device *dev)
 \tvoid *soc = cds_get_context(QDF_MODULE_ID_SOC);
 \tuint8_t vdev_id;
 \tint ret;
-\tbool backend_present;
-\tol_txrx_soc_handle dp_soc = soc;
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tstruct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+#endif
 
 \thdd_enter_dev(dev);"""
 enable_new = """int hdd_enable_monitor_mode(struct net_device *dev)
@@ -25,41 +25,51 @@ enable_new = """int hdd_enable_monitor_mode(struct net_device *dev)
 \tvoid *soc;
 \tint vdev_id;
 \tint ret;
-\tbool backend_present;
-\tol_txrx_soc_handle dp_soc;
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tstruct hdd_adapter *adapter;
+#endif
 
 \tif (!dev)
 \t\treturn -EINVAL;
+
 \tsoc = cds_get_context(QDF_MODULE_ID_SOC);
 \tif (!soc)
 \t\treturn -EINVAL;
-\tdp_soc = soc;
+
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tadapter = WLAN_HDD_GET_PRIV_PTR(dev);
 \tif (!adapter)
 \t\treturn -EINVAL;
-
+#endif
 \thdd_enter_dev(dev);"""
 disable_old = """int hdd_disable_monitor_mode(struct net_device *dev)
 {
 \tvoid *soc = cds_get_context(QDF_MODULE_ID_SOC);
-\tuint8_t vdev_id;
+\tint vdev_id;
 \tint ret;
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tstruct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+#endif
 
 \thdd_enter_dev(dev);"""
 disable_new = """int hdd_disable_monitor_mode(struct net_device *dev)
 {
 \tvoid *soc;
 \tint ret;
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tstruct hdd_adapter *adapter;
+#endif
 
 \tif (!dev)
 \t\treturn -EINVAL;
+
 \tsoc = cds_get_context(QDF_MODULE_ID_SOC);
 \tif (!soc)
 \t\treturn -EINVAL;
+
+#ifdef FEATURE_FRAME_INJECTION_SUPPORT
 \tadapter = WLAN_HDD_GET_PRIV_PTR(dev);
+#endif
 \thdd_enter_dev(dev);"""
 def replace_one(text, old, new, label):
     n = text.count(old)
@@ -84,11 +94,16 @@ s = prefix + body
 a, b = s.find("int hdd_enable_monitor_mode("), s.find("int hdd_disable_monitor_mode(")
 enable, disable = s[a:b], s[b:]
 if "cdp_reset_monitor_mode(soc, OL_TXRX_PDEV_ID, false)" not in disable: raise SystemExit("ERROR: PDEV reset absent")
-if "cdp_get_mon_vdev_from_pdev" in disable or "uint8_t vdev_id;" in disable or "vdev_id = cdp_get_mon_vdev_from_pdev" in disable or "VIFDIAG monitor reset vdev=" in disable: raise SystemExit("ERROR: disable still depends on monitor-vdev lookup")
+if "cdp_get_mon_vdev_from_pdev" in disable or "int vdev_id;" in disable or "uint8_t vdev_id;" in disable: raise SystemExit("ERROR: disable still depends on monitor-vdev lookup")
 for name, fn in (("enable", enable), ("disable", disable)):
     if "if (!dev)" not in fn or "if (!soc)" not in fn: raise SystemExit(f"ERROR: {name} null guards absent")
-if "if (!adapter)" not in enable: raise SystemExit("ERROR: adapter null guard absent")
+    if fn.find("if (!dev)") > fn.find("hdd_enter_dev(dev)") or fn.find("if (!soc)") > fn.find("hdd_enter_dev(dev)"):
+        raise SystemExit(f"ERROR: {name} null guards must precede hdd_enter_dev")
+if "#ifdef FEATURE_FRAME_INJECTION_SUPPORT" in enable and "if (!adapter)" not in enable:
+    raise SystemExit("ERROR: frame-injection adapter null guard absent")
 if "uint8_t vdev_id;" in enable or "int vdev_id;" not in enable: raise SystemExit("ERROR: vdev_id must be signed")
+if "cdp_set_monitor_mode(soc, vdev_id, false)" not in enable:
+    raise SystemExit("ERROR: monitor enable call missing")
 if s != original: p.write_text(s)
 print("QCACLD_MONITOR_NULL_GUARDS=PASS")
 print("QCACLD_MONITOR_VDEV_ID_SIGNEDNESS=PASS")
