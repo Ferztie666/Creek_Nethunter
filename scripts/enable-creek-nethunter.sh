@@ -193,7 +193,7 @@ CFG="$COMMON/scripts/config --file $NETHUNTER_CONFIG"
 # DroidSpaces/container support + ABI-safe SYSVIPC patches above.
 $CFG \
   -d CONFIG_LOCALVERSION_AUTO \
-  --set-str CONFIG_LOCALVERSION "${CREEK_LOCALVERSION_SUFFIX:?CREEK_LOCALVERSION_SUFFIX must be set}" \
+  --set-str CONFIG_LOCALVERSION "" \
   -e CONFIG_SYSVIPC \
   -e CONFIG_DEVTMPFS \
   -e CONFIG_PID_NS \
@@ -509,8 +509,11 @@ merge_nethunter_config() {
   local config_localversion_line
   config_localversion_line="$(grep -m1 '^CONFIG_LOCALVERSION=' "${config_file}" || true)"
   configured_suffix="$(printf '%s\n' "$config_localversion_line" | awk -F '"' '{print $2}')"
-  if [[ "$configured_suffix" != "$expected_suffix" ]]; then
-    echo "ERROR: final .config LOCALVERSION mismatch: expected=$expected_suffix actual=$configured_suffix" >&2
+  # Keep CONFIG_LOCALVERSION empty: the pinned MiCode build wrapper
+  # forwards GKI_LOCALVERSION as the environment LOCALVERSION. Setting the
+  # same suffix in both places makes utsrelease.h append it twice (>64 chars).
+  if [[ -n "$configured_suffix" ]]; then
+    echo "ERROR: final .config CONFIG_LOCALVERSION must be empty when LOCALVERSION is supplied by the build environment; actual=$configured_suffix" >&2
     return 1
   fi
   if [[ "${LOCALVERSION:-}" != "$expected_suffix" ]]; then
