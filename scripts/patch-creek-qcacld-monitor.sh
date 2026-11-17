@@ -79,7 +79,7 @@ s = prefix + body
 a, b = s.find("int hdd_enable_monitor_mode("), s.find("int hdd_disable_monitor_mode(")
 enable, disable = s[a:b], s[b:]
 if "cdp_reset_monitor_mode(soc, OL_TXRX_PDEV_ID, false)" not in disable: raise SystemExit("ERROR: PDEV reset absent")
-if "cdp_get_mon_vdev_from_pdev" in disable or "vdev_id" in disable: raise SystemExit("ERROR: disable still depends on monitor-vdev lookup")
+if "cdp_get_mon_vdev_from_pdev" in disable or "uint8_t vdev_id;" in disable or "vdev_id = cdp_get_mon_vdev_from_pdev" in disable or "VIFDIAG monitor reset vdev=" in disable: raise SystemExit("ERROR: disable still depends on monitor-vdev lookup")
 for name, fn in (("enable", enable), ("disable", disable)):
     if "if (!dev)" not in fn or "if (!soc)" not in fn: raise SystemExit(f"ERROR: {name} null guards absent")
 if "if (!adapter)" not in enable: raise SystemExit("ERROR: adapter null guard absent")
