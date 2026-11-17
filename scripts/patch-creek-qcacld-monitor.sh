@@ -82,13 +82,9 @@ start = s.find("int hdd_disable_monitor_mode(")
 if start < 0: raise SystemExit("ERROR: disable monitor function missing")
 prefix, body = s[:start], s[start:]
 lookup_old = """\tvdev_id = cdp_get_mon_vdev_from_pdev(soc, OL_TXRX_PDEV_ID);
-\tif (vdev_id == (uint8_t)-EINVAL)
-\t\treturn -EINVAL;
-\tret = cdp_reset_monitor_mode(soc, OL_TXRX_PDEV_ID, false);
-\thdd_warn("VIFDIAG monitor reset vdev=%u status=%d", vdev_id, ret);"""
-lookup_new = """\t/* Always attempt PDEV reset, even if monitor-vdev lookup failed. */
-\tret = cdp_reset_monitor_mode(soc, OL_TXRX_PDEV_ID, false);
-\thdd_warn("VIFDIAG monitor reset status=%d", ret);"""
+\tif (vdev_id < 0)
+\t\treturn -EINVAL;"""
+lookup_new = """\t/* Always attempt PDEV reset, even if monitor-vdev lookup failed. */"""
 body = replace_one(body, lookup_old, lookup_new, "disable monitor recovery")
 s = prefix + body
 a, b = s.find("int hdd_enable_monitor_mode("), s.find("int hdd_disable_monitor_mode(")
