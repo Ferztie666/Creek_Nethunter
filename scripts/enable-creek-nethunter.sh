@@ -508,8 +508,7 @@ merge_nethunter_config() {
   local configured_suffix
   local config_localversion_line
   config_localversion_line="$(grep -m1 '^CONFIG_LOCALVERSION=' "${config_file}" || true)"
-  configured_suffix="${config_localversion_line#CONFIG_LOCALVERSION=\\"}"
-  configured_suffix="${configured_suffix%\\"}"
+  configured_suffix="$(printf '%s\n' "$config_localversion_line" | awk -F '"' '{print $2}')"
   if [[ "$configured_suffix" != "$expected_suffix" ]]; then
     echo "ERROR: final .config LOCALVERSION mismatch: expected=$expected_suffix actual=$configured_suffix" >&2
     return 1
