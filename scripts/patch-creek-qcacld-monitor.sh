@@ -15,6 +15,8 @@ enable_old = """int hdd_enable_monitor_mode(struct net_device *dev)
 \tvoid *soc = cds_get_context(QDF_MODULE_ID_SOC);
 \tuint8_t vdev_id;
 \tint ret;
+\tbool backend_present;
+\tol_txrx_soc_handle dp_soc = soc;
 \tstruct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
 
 \thdd_enter_dev(dev);"""
@@ -23,6 +25,8 @@ enable_new = """int hdd_enable_monitor_mode(struct net_device *dev)
 \tvoid *soc;
 \tint vdev_id;
 \tint ret;
+\tbool backend_present;
+\tol_txrx_soc_handle dp_soc;
 \tstruct hdd_adapter *adapter;
 
 \tif (!dev)
@@ -30,6 +34,7 @@ enable_new = """int hdd_enable_monitor_mode(struct net_device *dev)
 \tsoc = cds_get_context(QDF_MODULE_ID_SOC);
 \tif (!soc)
 \t\treturn -EINVAL;
+\tdp_soc = soc;
 \tadapter = WLAN_HDD_GET_PRIV_PTR(dev);
 \tif (!adapter)
 \t\treturn -EINVAL;
