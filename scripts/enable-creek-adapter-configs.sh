@@ -269,7 +269,16 @@ creek_nethunter_apply_adapter_config() {
   "${kernel_dir}/scripts/config" --file "${config_file}" \
     -d CONFIG_LOCALVERSION_AUTO --set-str CONFIG_LOCALVERSION ""
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
-  if grep -Eq '^CONFIG_LOCALVERSION_AUTO=y
+  if grep -qF 'CONFIG_LOCALVERSION_AUTO=y' "${config_file}"; then
+    echo "ERROR: CONFIG_LOCALVERSION_AUTO remains enabled in MSM config" >&2
+    return 1
+  fi
+  actual_localversion="$(grep '^CONFIG_LOCALVERSION=' "${config_file}" | cut -d '"' -f2)"
+  if [[ -n "${actual_localversion}" ]]; then
+    echo "ERROR: MSM CONFIG_LOCALVERSION must remain empty; suffix is passed explicitly to Kbuild" >&2
+    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
+    return 1
+  fi
   # the synced MSM project. Kbuild's SCM suffix therefore adds '+' even though
   # CONFIG_LOCALVERSION_AUTO is disabled. Pin SCM suffix generation explicitly
   # for this release audit using Kbuild's supported .scmversion override.
