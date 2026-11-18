@@ -251,7 +251,11 @@ jobs:
           }
           trap cleanup_scm_overrides EXIT
           set +e
-          build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
+          # Pass LOCALVERSION as a make command-line variable. The mixed
+          # build recursively forwards "$*" to the GKI build, and the same
+          # variable is inherited by outer MSM and external-module make calls.
+          # Config files keep CONFIG_LOCALVERSION empty to prevent duplication.
+          build/build.sh -j"$JOBS" "LOCALVERSION=$expected_suffix" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build.log"
           build_rc=${PIPESTATUS[0]}
           set -e
           if [ "$build_rc" -ne 0 ]; then
@@ -267,7 +271,7 @@ jobs:
                 "$KP/common/android/gki_aarch64_modules" \
                 "$GITHUB_WORKSPACE/artifacts/logs/gki-module-list-reconcile.txt"
               echo "Retrying build once after explicitly reviewed GKI module-list reconciliation."
-              build/build.sh -j"$JOBS" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build-retry.log"
+              build/build.sh -j"$JOBS" "LOCALVERSION=$expected_suffix" 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/build-retry.log"
             else
               exit "$build_rc"
             fi
