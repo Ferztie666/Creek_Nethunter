@@ -243,10 +243,10 @@ creek_nethunter_apply_adapter_config() {
   test -s "${fragment}" || { echo "ERROR: adapter fragment missing: ${fragment}" >&2; return 1; }
   KCONFIG_CONFIG="${config_file}" "${kernel_dir}/scripts/kconfig/merge_config.sh" -y -m "${config_file}" "${fragment}"
 
-  # The vendor/MSM domain builds its own modules. Previously only the inner GKI
-  # config received CONFIG_LOCALVERSION, so MSM-staged modules carried vermagic
-  # "5.15.167" while the checked kernelrelease claimed the full developer suffix.
-  # Align this config domain too; never weaken the post-build vermagic gate.
+  # Keep CONFIG_LOCALVERSION empty in the MSM config. The full release suffix
+  # is supplied as an explicit Kbuild command-line variable by build.sh. This
+  # avoids relying on an environment variable that can be lost in mixed builds,
+  # and avoids adding the suffix twice when Kbuild reads both config and env.
   local expected_release="${EXPECTED_KERNEL_RELEASE:?EXPECTED_KERNEL_RELEASE must be set for release verification}"
   local base_release="${expected_release%%-*}"
   local release_suffix="${expected_release#"${base_release}"}"
@@ -254,7 +254,7 @@ creek_nethunter_apply_adapter_config() {
     echo "ERROR: unexpected Creek release format: ${expected_release}" >&2
     return 1
   fi
-  "${kernel_dir}/scripts/config" --file "${config_file}" -d CONFIG_LOCALVERSION_AUTO --set-str CONFIG_LOCALVERSION "${release_suffix}"
+  "${kernel_dir}/scripts/config" --file "${config_file}" -d CONFIG_LOCALVERSION_AUTO --set-str CONFIG_LOCALVERSION ""
 
   # Force-disable the optional GSI function after all fragments. The pinned
   # usb_f_gsi.ko has unresolved RNDIS API references and makes depmod fatal.
@@ -264,19 +264,100 @@ creek_nethunter_apply_adapter_config() {
   read -r -a adapter_make_args <<< "${MAKE_ARGS:-}"
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
 
-  # Reassert the intended release controls after olddefconfig. This MSM tree
-  # previously emitted a git-derived release despite CONFIG_LOCALVERSION being
-  # set, so audit both the resolved config and Kbuild's generated metadata.
+  # Reassert the empty config value after olddefconfig. The exact suffix
+  # must come from the explicit LOCALVERSION= make argument during every build.
   "${kernel_dir}/scripts/config" --file "${config_file}" \
-    -d CONFIG_LOCALVERSION_AUTO --set-str CONFIG_LOCALVERSION "${release_suffix}"
+    -d CONFIG_LOCALVERSION_AUTO --set-str CONFIG_LOCALVERSION ""
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
-  if grep -Eq '^CONFIG_LOCALVERSION_AUTO=y$' "${config_file}"; then
+  if grep -Eq '^CONFIG_LOCALVERSION_AUTO=y
+  # The QCACLD safety patch intentionally modifies a tracked source file in
+  # the synced MSM project. Kbuild's SCM suffix therefore adds '+' even though
+  # CONFIG_LOCALVERSION_AUTO is disabled. Pin SCM suffix generation explicitly
+  # for this release audit using Kbuild's supported .scmversion override.
+  # Never overwrite tracked metadata; the empty override is temporary and is
+  # removed even when prepare/kernelrelease fails.
+  local scm_override="${kernel_dir}/.scmversion"
+  local scm_override_owned=0
+  # The workflow owns empty .scmversion markers for the complete build so
+  # both common/GKI and MSM/vendor Kbuild trees keep a stable release string.
+  # Reuse only that exact safe form: never follow symlinks, truncate non-empty
+  # metadata, or replace a directory/other file type.
+  if [[ -e "${scm_override}" || -L "${scm_override}" ]]; then
+    if [[ -L "${scm_override}" || ! -f "${scm_override}" || -s "${scm_override}" ]]; then
+      echo "ERROR: unsafe pre-existing Kbuild SCM metadata; expected an empty regular workflow-owned marker: ${scm_override}" >&2
+      return 1
+    fi
+    echo "[creek-nethunter] reusing workflow-owned empty SCM override: ${scm_override}"
+  else
+    : > "${scm_override}"
+    scm_override_owned=1
+    echo "[creek-nethunter] created temporary empty SCM override: ${scm_override}"
+  fi
+  local auto_config="${OUT_DIR}/include/config/auto.conf"
+  local config_localversion auto_localversion actual_release
+  actual_release="$(
+    set -euo pipefail
+    if [[ "${scm_override_owned}" == "1" ]]; then
+      trap 'rm -f -- "${scm_override}"' EXIT
+    fi
+    make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" prepare >/dev/null
+    if [[ ! -s "${auto_config}" ]]; then
+      echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
+      exit 1
+    fi
+    config_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${config_file}")"
+    auto_localversion="$(awk -F '"' '$1 == "CONFIG_LOCALVERSION=" { print $2; exit }' "${auto_config}")"
+    if [[ -n "${config_localversion}" || -n "${auto_localversion}" ]]; then
+      echo "ERROR: MSM CONFIG_LOCALVERSION must be empty; config='${config_localversion:-missing}' auto.conf='${auto_localversion:-missing}'" >&2
+      grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
+      exit 1
+    fi
+    env -u KERNELRELEASE make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" "LOCALVERSION=${release_suffix}" -s kernelrelease
+  )"
+  if [[ "${actual_release}" != "${expected_release}" ]]; then
+    echo "ERROR: MSM/vendor kernelrelease mismatch after Kbuild prepare: expected=${expected_release} actual=${actual_release}" >&2
+    grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
+    return 1
+  fi
+  echo "[creek-nethunter] MSM/vendor KERNELRELEASE verified: ${actual_release}"
+  # Verify resolved config after Kconfig dependency processing, not just the fragment.
+  if ! grep -Eq "^CONFIG_MAC80211=m$" "${config_file}"; then
+    echo "ERROR: audited USB-WLAN baseline CONFIG_MAC80211=m did not survive olddefconfig" >&2
+    grep -E "^CONFIG_(MAC80211|CFG80211|MAC80211_LEDS|MAC80211_RC_MINSTREL)=" "${config_file}" >&2 || true
+    return 1
+  fi
+  if grep -Eq "^CONFIG_MAC80211_LEDS=(y|m)$" "${config_file}"; then
+    echo "ERROR: CONFIG_MAC80211_LEDS is enabled but led_trigger_blink is not exported by the pinned KMI" >&2
+    grep -n "^CONFIG_MAC80211_LEDS=" "${config_file}" >&2 || true
+    return 1
+  fi
+  for symbol in NET_NSH OPENVSWITCH VXLAN GENEVE BATMAN_ADV NFC_DIGITAL NFC_NCI NFC_HCI NFC_SHDLC NFC_LLCP NFC_PN533 NFC_PN533_USB; do
+    if grep -Eq "^CONFIG_${symbol}=(y|m)$" "${config_file}"; then
+      echo "ERROR: known KMI-incompatible optional module CONFIG_${symbol} was re-enabled after olddefconfig" >&2
+      grep -n "^CONFIG_${symbol}=" "${config_file}" >&2 || true
+      return 1
+    fi
+  done
+  echo "[creek-nethunter] post-defconfig KMI-risk audit passed: MAC80211=m, LED hook and known failing networking/NFC child modules disabled"
+  if grep -Eq "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=(y|m)$" "${config_file}"; then
+    echo "ERROR: broken GSI gadget remains enabled after config merge" >&2
+    grep -E "^CONFIG_(USB_F_GSI|USB_CONFIGFS_F_GSI)=" "${config_file}" >&2 || true
+    return 1
+  fi
+  echo "[creek-nethunter] adapter fragment merged; broken GSI gadget disabled"
+}
+POST_DEFCONFIG_CMDS="__POST_COMMANDS__"
+"""
+s=s.replace("__POST_COMMANDS__", post)
+p.write_text(s)
+PY_BUILD_CONFIG
+ "${config_file}"; then
     echo "ERROR: CONFIG_LOCALVERSION_AUTO remains enabled in MSM config" >&2
     return 1
   fi
   actual_localversion="$(grep '^CONFIG_LOCALVERSION=' "${config_file}" | cut -d '"' -f2)"
-  if [[ "${actual_localversion}" != "${release_suffix}" ]]; then
-    echo "ERROR: MSM CONFIG_LOCALVERSION does not match pinned suffix ${release_suffix}" >&2
+  if [[ -n "${actual_localversion}" ]]; then
+    echo "ERROR: MSM CONFIG_LOCALVERSION must remain empty; suffix is passed explicitly to Kbuild" >&2
     grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" >&2 || true
     return 1
   fi
