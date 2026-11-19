@@ -27,7 +27,13 @@ DISPLAY_SYMVERS := $(O)/../vendor/qcom/opensource/display-drivers/Module.symvers
 # KBUILD_MIXED_TREE supplies the common GKI vmlinux symbols to this
 # vendor build. Do not pass vmlinux.symvers again: older Creek Kbuild then
 # sees every built-in export twice during modpost.
-COMMON_ARGS := ARCH=arm64 LLVM=1 KERNEL_SRC=$(VENDOR_KERNEL_SRC) O=$(O) KBUILD_MIXED_TREE=$(KBUILD_MIXED_TREE)
+# Carry the exact release into every separately invoked vendor/external Kbuild.
+# build.sh's top-level LOCALVERSION argument is not guaranteed to reach these
+# nested make processes; without it modules_install emits vermagic 5.15.167.
+ifeq ($(strip $(LOCALVERSION)),)
+$(error LOCALVERSION is required for Creek external modules; refusing shortened vermagic)
+endif
+COMMON_ARGS := ARCH=arm64 LLVM=1 KERNEL_SRC=$(VENDOR_KERNEL_SRC) O=$(O) KBUILD_MIXED_TREE=$(KBUILD_MIXED_TREE) LOCALVERSION=$(LOCALVERSION)
 
 # MiCode's blair GKI build passes this complete platform configuration to
 # both the platform modules and QCACLD through WLAN_PLATFORM_KBUILD_OPTIONS.
