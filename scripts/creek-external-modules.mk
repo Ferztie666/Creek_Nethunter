@@ -72,7 +72,9 @@ define build_module
 	# Enter the module directory before invoking its wrapper. Xiaomi's wrappers
 	# use PWD when deriving M, so make -C would leave PWD pointing at KP.
 	cd $(2) && $(if $(6),export $(6);,) $(MAKE) M=$(2) $(COMMON_ARGS) $(4) all
-	cd $(2) && $(if $(6),export $(6);,) $(MAKE) M=$(2) $(COMMON_ARGS) $(4) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/$(5) modules_install
+	# Xiaomi wrapper Makefiles recurse into Kbuild for modules_install but drop O= and LOCALVERSION.
+	# Install through the kernel Makefile directly so the exact prepared output tree/release is used.
+	$(MAKE) -C $(VENDOR_KERNEL_SRC) M=$(2) $(COMMON_ARGS) $(4) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/$(5) modules_install
 endef
 
 wlan-platform:
