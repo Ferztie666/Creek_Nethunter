@@ -261,7 +261,16 @@ creek_nethunter_apply_adapter_config() {
   "${kernel_dir}/scripts/config" --file "${config_file}" -d CONFIG_USB_F_GSI -d CONFIG_USB_CONFIGFS_F_GSI
   local -a adapter_tool_args=() adapter_make_args=()
   read -r -a adapter_tool_args <<< "${TOOL_ARGS:-}"
-  read -r -a adapter_make_args <<< "${MAKE_ARGS:-}"
+  # MiCode build.sh defines MAKE_ARGS as a Bash array. Reading it with
+  # "read -a" silently kept only its first word (usually -jN), dropping
+  # LOCALVERSION=... before prepare and leaving UTS_RELEASE at 5.15.167.
+  # Preserve every original make argument, then replace any LOCALVERSION
+  # assignment with the exact release suffix required by this build.
+  local make_arg
+  for make_arg in "${MAKE_ARGS[@]}"; do
+    [[ "${make_arg}" == LOCALVERSION=* ]] || adapter_make_args+=("${make_arg}")
+  done
+  adapter_make_args+=("LOCALVERSION=${release_suffix}")
   make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" olddefconfig
 
   # Reassert the empty config value after olddefconfig. The exact suffix
@@ -309,6 +318,19 @@ creek_nethunter_apply_adapter_config() {
       trap 'rm -f -- "${scm_override}"' EXIT
     fi
     make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" prepare >/dev/null
+    local utsrelease_header="${OUT_DIR}/include/generated/utsrelease.h"
+    local uts_release
+    if [[ ! -s "${utsrelease_header}" ]]; then
+      echo "ERROR: generated UTS_RELEASE header is missing: ${utsrelease_header}" >&2
+      exit 1
+    fi
+    uts_release="$(sed -n 's/^#define UTS_RELEASE "\(.*\)"/\1/p' "${utsrelease_header}")"
+    if [[ "${uts_release}" != "${expected_release}" ]]; then
+      echo "ERROR: prepared MSM UTS_RELEASE mismatch: expected=${expected_release} actual=${uts_release:-missing}" >&2
+      cat "${utsrelease_header}" >&2
+      exit 1
+    fi
+    echo "[creek-nethunter] prepared MSM UTS_RELEASE verified: ${uts_release}"
     if [[ ! -s "${auto_config}" ]]; then
       echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
       exit 1
@@ -320,7 +342,7 @@ creek_nethunter_apply_adapter_config() {
       grep -E '^CONFIG_LOCALVERSION(_AUTO)?=' "${config_file}" "${auto_config}" >&2 || true
       exit 1
     fi
-    env -u KERNELRELEASE make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" "LOCALVERSION=${release_suffix}" -s kernelrelease
+    env -u KERNELRELEASE make -C "${kernel_dir}" "${adapter_tool_args[@]}" O="${OUT_DIR}" "${adapter_make_args[@]}" -s kernelrelease
   )"
   if [[ "${actual_release}" != "${expected_release}" ]]; then
     echo "ERROR: MSM/vendor kernelrelease mismatch after Kbuild prepare: expected=${expected_release} actual=${actual_release}" >&2
