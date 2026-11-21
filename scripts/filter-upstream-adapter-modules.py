@@ -38,6 +38,7 @@ def main() -> int:
     ap.add_argument("--symvers-root", required=True)
     ap.add_argument("--target-list", required=True)
     ap.add_argument("--report", required=True)
+    ap.add_argument("--expected-release", required=True, help="exact release expected by the final GKI Image")
     a = ap.parse_args()
     staging = Path(a.staging)
     gki_staging = Path(a.gki_staging) if a.gki_staging else None
@@ -49,21 +50,34 @@ def main() -> int:
     roots.extend(sorted(p for p in staging.glob("lib/modules/*") if p.is_dir()))
     if not roots:
         raise SystemExit(f"ERROR: no staged module roots under {staging}/lib/modules or {gki_staging}/lib/modules")
-    # GKI root comes first so expected vermagic matches the kernel image build.
-    modroot = roots[0]
+    # Only GKI staging can establish compatibility with the final boot Image.
+    # MSM/vendor staging intentionally carries the base release and must never
+    # establish the baseline for modules loaded by the GKI kernel.
+    gki_roots = sorted(p for p in gki_staging.glob("lib/modules/*") if p.is_dir()) if gki_staging else []
+    if not gki_roots:
+        raise SystemExit("ERROR: GKI staging is required to verify adapter compatibility with the final kernel Image")
+    modroot = gki_roots[0]
     staged: dict[str, Path] = {}
+    gki_staged: dict[str, Path] = {}
     for root in roots:
-        for p in root.rglob("*.ko"):
-            staged.setdefault(canon(p.name), p)
-    # Prefer an in-tree GKI module so upstream binaries are compared to the kernel image release.
-    baseline = staged.get("mac80211") or staged.get("cfg80211") or staged.get("rtl8xxxu") or staged.get("qca_cld3_wlan")
+        for module_path in root.rglob("*.ko"):
+            staged.setdefault(canon(module_path.name), module_path)
+    for root in gki_roots:
+        for module_path in root.rglob("*.ko"):
+            gki_staged.setdefault(canon(module_path.name), module_path)
+    baseline = (gki_staged.get("mac80211") or gki_staged.get("cfg80211")
+                or gki_staged.get("rtl8xxxu") or next(iter(gki_staged.values()), None))
     if baseline is None:
-        baseline = next(iter(staged.values()), None)
-    if baseline is None:
-        raise SystemExit("ERROR: no built module available to establish current vermagic")
+        raise SystemExit("ERROR: no GKI-built module available to establish final Image vermagic")
     expected_vermagic = module_field("vermagic", baseline)
     if not expected_vermagic:
-        raise SystemExit(f"ERROR: cannot read build vermagic from {baseline}")
+        raise SystemExit(f"ERROR: cannot read GKI build vermagic from {baseline}")
+    expected_release = a.expected_release.strip()
+    if expected_vermagic.split()[0] != expected_release:
+        raise SystemExit(
+            f"ERROR: GKI baseline release mismatch: expected {expected_release}, "
+            f"baseline {baseline} has {expected_vermagic}"
+        )
     symvers_files = sorted(Path(a.symvers_root).rglob("Module.symvers"))
     symvers: dict[str, set[str]] = {}
     for file in symvers_files:
