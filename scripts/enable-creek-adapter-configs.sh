@@ -261,11 +261,11 @@ creek_nethunter_apply_adapter_config() {
   "${kernel_dir}/scripts/config" --file "${config_file}" -d CONFIG_USB_F_GSI -d CONFIG_USB_CONFIGFS_F_GSI
   local -a adapter_tool_args=() adapter_make_args=()
   read -r -a adapter_tool_args <<< "${TOOL_ARGS:-}"
-  # MiCode build.sh defines MAKE_ARGS as a Bash array. Reading it with
-  # "read -a" silently kept only its first word (usually -jN), dropping
-  # LOCALVERSION=... before prepare and leaving UTS_RELEASE at 5.15.167.
-  # Preserve every original make argument, then replace any LOCALVERSION
-  # assignment with the exact release suffix required by this build.
+  # MiCode build.sh defines MAKE_ARGS as a Bash array. Preserve all
+  # arguments and ensure the exact suffix reaches the MSM kernelrelease target.
+  # Xiaomi's pinned msm-kernel Makefile intentionally writes KERNELVERSION only
+  # to include/config/kernel.release; therefore MSM UTS_RELEASE remains 5.15.167.
+  # The full Android/GKI release is checked separately via "kernelrelease".
   local make_arg
   for make_arg in "${MAKE_ARGS[@]}"; do
     [[ "${make_arg}" == LOCALVERSION=* ]] || adapter_make_args+=("${make_arg}")
@@ -324,13 +324,13 @@ creek_nethunter_apply_adapter_config() {
       echo "ERROR: generated UTS_RELEASE header is missing: ${utsrelease_header}" >&2
       exit 1
     fi
-    uts_release="$(sed -n 's/^#define UTS_RELEASE "\(.*\)"/\1/p' "${utsrelease_header}")"
-    if [[ "${uts_release}" != "${expected_release}" ]]; then
-      echo "ERROR: prepared MSM UTS_RELEASE mismatch: expected=${expected_release} actual=${uts_release:-missing}" >&2
+    uts_release="$(awk -F '"' '/^#define UTS_RELEASE / { print $2; exit }' "${utsrelease_header}")"
+    if [[ "${uts_release}" != "${base_release}" ]]; then
+      echo "ERROR: prepared MSM UTS_RELEASE mismatch: expected base=${base_release} actual=${uts_release:-missing}" >&2
       cat "${utsrelease_header}" >&2
       exit 1
     fi
-    echo "[creek-nethunter] prepared MSM UTS_RELEASE verified: ${uts_release}"
+    echo "[creek-nethunter] prepared MSM UTS_RELEASE verified: ${uts_release} (vendor Kbuild base release)"
     if [[ ! -s "${auto_config}" ]]; then
       echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
       exit 1
