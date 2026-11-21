@@ -369,7 +369,7 @@ jobs:
             --expected-release "$EXPECTED_KERNEL_RELEASE" \
             --report "$GITHUB_WORKSPACE/artifacts/logs/upstream-adapter-compatibility.txt"
           echo "== ADAPTER PACKAGE =="
-          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" "$OUT_DIR/staging" artifacts/modules "$OUT_DIR/gki_kernel/staging"
+          bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" "$OUT_DIR/staging" artifacts/modules "$OUT_DIR/gki_kernel/staging" "$EXPECTED_KERNEL_RELEASE"
           test -s artifacts/modules/MODULE-LIST.txt
           test ! -e artifacts/modules/qca_cld3_wlan.ko
 
