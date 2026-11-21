@@ -365,7 +365,8 @@ jobs:
             --staging "$OUT_DIR/staging" \
             --gki-staging "$OUT_DIR/gki_kernel/staging" \
             --symvers-root "$OUT_DIR" \
-            --target-list "$GITHUB_WORKSPACE/config/creek-adapter-module-targets.txt" \
+            --target-list "$GITHUB_WORKSPACE/config/creek-adapter-module-targets.txt"
+            --expected-release "$EXPECTED_KERNEL_RELEASE" \
             --report "$GITHUB_WORKSPACE/artifacts/logs/upstream-adapter-compatibility.txt"
           echo "== ADAPTER PACKAGE =="
           bash -x "$GITHUB_WORKSPACE/scripts/package-creek-adapters.sh" "$OUT_DIR/staging" artifacts/modules "$OUT_DIR/gki_kernel/staging"
