@@ -330,7 +330,7 @@ creek_nethunter_apply_adapter_config() {
       cat "${utsrelease_header}" >&2
       exit 1
     fi
-    echo "[creek-nethunter] prepared MSM UTS_RELEASE verified: ${uts_release} (vendor Kbuild base release)"
+    echo "[creek-nethunter] prepared MSM UTS_RELEASE verified: ${uts_release} (vendor Kbuild base release)" >&2
     if [[ ! -s "${auto_config}" ]]; then
       echo "ERROR: generated MSM auto.conf is missing or empty: ${auto_config}" >&2
       exit 1
