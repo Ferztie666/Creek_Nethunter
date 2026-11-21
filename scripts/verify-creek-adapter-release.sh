@@ -1,53 +1,76 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-STAGING="${1:?usage: verify-creek-adapter-release.sh <staging> <expected-release> [report] [gki-staging]}"
-EXPECTED="${2:?expected kernel release is required}"
+STAGING="${1:?usage: verify-creek-adapter-release.sh <msm-staging> <expected-gki-release> [report] [gki-staging]}"
+EXPECTED="${2:?expected GKI kernel release is required}"
 REPORT="${3:-$PWD/module-release-audit.txt}"
 GKI_STAGING="${4:-}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 command -v modinfo >/dev/null 2>&1 || die "modinfo is required for module release audit"
 [[ "$EXPECTED" =~ ^[A-Za-z0-9._+-]+$ ]] || die "invalid expected release string: $EXPECTED"
-declare -a MODULE_ROOTS=()
+BASE_RELEASE="${EXPECTED%%-*}"
+[[ -n "$BASE_RELEASE" && "$BASE_RELEASE" != "$EXPECTED" ]] || die "expected a full Android/GKI release, got: $EXPECTED"
+
+declare -a MODULE_ROOTS=() MODULE_DOMAINS=() MODULE_EXPECTED=()
 if [[ -n "$GKI_STAGING" ]]; then
   for d in "$GKI_STAGING"/lib/modules/*; do
-    [[ -d "$d" ]] && MODULE_ROOTS+=("$d")
+    [[ -d "$d" ]] || continue
+    MODULE_ROOTS+=("$d")
+    MODULE_DOMAINS+=("GKI")
+    MODULE_EXPECTED+=("$EXPECTED")
   done
 fi
 for d in "$STAGING"/lib/modules/*; do
-  [[ -d "$d" ]] && MODULE_ROOTS+=("$d")
+  [[ -d "$d" ]] || continue
+  MODULE_ROOTS+=("$d")
+  MODULE_DOMAINS+=("MSM_VENDOR")
+  # MiCode's pinned Xiaomi msm-kernel Makefile deliberately writes only
+  # KERNELVERSION to include/config/kernel.release. Its vendor modules thus
+  # carry the base vermagic; the inner GKI modules carry the full release.
+  MODULE_EXPECTED+=("$BASE_RELEASE")
 done
 [[ "${#MODULE_ROOTS[@]}" -gt 0 ]] || die "no module roots under $STAGING or $GKI_STAGING"
 mkdir -p "$(dirname "$REPORT")"
-: > "$REPORT"
-printf 'expected_release\t%s\n' "$EXPECTED" >> "$REPORT"
+{
+  printf 'domain\troot\texpected_release\tmodule\tstatus\tvermagic\n'
+} > "$REPORT"
+
 count=0
 bad=0
-for root in "${MODULE_ROOTS[@]}"; do
+gki_count=0
+msm_count=0
+for i in "${!MODULE_ROOTS[@]}"; do
+  root="${MODULE_ROOTS[$i]}"
+  domain="${MODULE_DOMAINS[$i]}"
+  expected_domain="${MODULE_EXPECTED[$i]}"
   while IFS= read -r -d '' module; do
     count=$((count + 1))
+    [[ "$domain" == "GKI" ]] && gki_count=$((gki_count + 1)) || msm_count=$((msm_count + 1))
     vermagic="$(modinfo -F vermagic "$module" 2>/dev/null | head -n1 || true)"
     release="${vermagic%% *}"
     relpath="${module#"$root"/}"
     if [[ -z "$vermagic" ]]; then
-      printf '%s\tFAIL_NO_VERMAGIC\t\n' "$relpath" >> "$REPORT"
+      printf '%s\t%s\t%s\t%s\tFAIL_NO_VERMAGIC\t\n' "$domain" "$root" "$expected_domain" "$relpath" >> "$REPORT"
       bad=$((bad + 1))
-    elif [[ "$release" != "$EXPECTED" ]]; then
-      printf '%s\tFAIL_RELEASE_MISMATCH\t%s\n' "$relpath" "$vermagic" >> "$REPORT"
+    elif [[ "$release" != "$expected_domain" ]]; then
+      printf '%s\t%s\t%s\t%s\tFAIL_RELEASE_MISMATCH\t%s\n' "$domain" "$root" "$expected_domain" "$relpath" "$vermagic" >> "$REPORT"
       bad=$((bad + 1))
     else
-      printf '%s\tPASS\t%s\n' "$relpath" "$vermagic" >> "$REPORT"
+      printf '%s\t%s\t%s\t%s\tPASS\t%s\n' "$domain" "$root" "$expected_domain" "$relpath" "$vermagic" >> "$REPORT"
     fi
   done < <(find "$root" -type f -name '*.ko' -print0 | sort -z)
 done
 [[ "$count" -gt 0 ]] || die "no .ko files found under any audited module root: ${MODULE_ROOTS[*]}"
 if [[ "$bad" -gt 0 ]]; then
-  echo "ERROR: $bad of $count staged modules do not match expected release $EXPECTED" >&2
+  echo "ERROR: $bad of $count staged modules failed their domain-specific release check" >&2
   grep -E 'FAIL_' "$REPORT" >&2 || true
   exit 1
 fi
-echo "KERNEL_RELEASE_AUDIT=PASS"
-echo "EXPECTED_KERNEL_RELEASE=$EXPECTED"
+echo "KERNEL_RELEASE_AUDIT=PASS_DOMAIN_AWARE"
+echo "EXPECTED_GKI_RELEASE=$EXPECTED"
+echo "EXPECTED_MSM_VENDOR_RELEASE=$BASE_RELEASE"
+echo "GKI_MODULES=$gki_count"
+echo "MSM_VENDOR_MODULES=$msm_count"
 echo "AUDITED_MODULES=$count"
 echo "REPORT=$REPORT"
