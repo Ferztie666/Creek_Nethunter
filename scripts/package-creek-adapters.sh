@@ -4,6 +4,8 @@ set -euo pipefail
 STAGING="${1:?usage: package-creek-adapters.sh <staging> <output-dir> [gki-staging]}"
 OUT="${2:?usage: package-creek-adapters.sh <staging> <output-dir> [gki-staging]}"
 GKI_STAGING="${3:-}"
+EXPECTED_RELEASE="${4:?usage: package-creek-adapters.sh <staging> <output-dir> <gki-staging> <expected-release>}"
+[[ "$EXPECTED_RELEASE" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "ERROR: invalid expected GKI release: $EXPECTED_RELEASE" >&2; exit 2; }
 SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 declare -a MODULE_ROOTS=()
@@ -54,9 +56,14 @@ while IFS= read -r line; do
     continue
   fi
   if [ -n "${BY_NAME[$line]:-}" ]; then
+    vm="$(modinfo -F vermagic "${BY_NAME[$line]}" 2>/dev/null | awk 'NR==1 {print $1}')"
+    if [ "$vm" != "$EXPECTED_RELEASE" ]; then
+      printf '%s\t%s\t%s\n' "$line.ko" "BLOCKED_VERMAGIC_MISMATCH" "staged release=${vm:-missing}; required GKI release=$EXPECTED_RELEASE" >> "$STATUS"
+      continue
+    fi
     WANT["$line"]="driver"
     QUEUE+=("$line")
-    printf '%s\t%s\t%s\n' "$line.ko" "STAGED_TARGET" "Will package and verify vermagic/dependencies" >> "$STATUS"
+    printf '%s\t%s\t%s\n' "$line.ko" "STAGED_TARGET" "GKI vermagic matches; dependency closure will be verified" >> "$STATUS"
   else
     printf '%s\t%s\t%s\n' "$line.ko" "NOT_BUILT_OR_NOT_IN_SOURCE" "Not present in kernel staging; not fabricated" >> "$STATUS"
   fi
@@ -81,9 +88,14 @@ if command -v modinfo >/dev/null 2>&1; then
       [ -n "$dep" ] || continue
       dep="$(printf '%s' "$dep" | tr '-' '_')"
       if [ -n "${BY_NAME[$dep]:-}" ] && [ -z "${WANT[$dep]:-}" ]; then
+        dep_vm="$(modinfo -F vermagic "${BY_NAME[$dep]}" 2>/dev/null | awk 'NR==1 {print $1}')"
+        [ "$dep_vm" = "$EXPECTED_RELEASE" ] || {
+          echo "ERROR: dependency $dep has vermagic=${dep_vm:-missing}; required GKI release=$EXPECTED_RELEASE" >&2
+          exit 1
+        }
         WANT["$dep"]="dependency"
         QUEUE+=("$dep")
-        printf '%s\t%s\t%s\n' "$dep.ko" "DEPENDENCY" "Required by modinfo dependency closure" >> "$STATUS"
+        printf '%s\t%s\t%s\n' "$dep.ko" "DEPENDENCY" "Required by modinfo dependency closure; GKI vermagic matches" >> "$STATUS"
       fi
     done
   done
@@ -151,6 +163,10 @@ for n in "${!WANT[@]}"; do
   [ -n "$f" ] || continue
   vm="$(modinfo -F vermagic "$f" 2>/dev/null | awk 'NR==1 {print $1}')"
   [ -n "$vm" ] || { echo "ERROR: missing vermagic for $n" >&2; exit 1; }
+  if [ "$vm" != "$EXPECTED_RELEASE" ]; then
+    echo "ERROR: adapter module $n has release=$vm; required GKI release=$EXPECTED_RELEASE" >&2
+    exit 1
+  fi
   if [ -z "$KERNEL_RELEASE" ]; then
     KERNEL_RELEASE="$vm"
   elif [ "$KERNEL_RELEASE" != "$vm" ]; then
@@ -158,7 +174,7 @@ for n in "${!WANT[@]}"; do
     exit 1
   fi
 done
-[ -n "$KERNEL_RELEASE" ] || { echo "ERROR: no module vermagic found" >&2; exit 1; }
+[ -n "$KERNEL_RELEASE" ] || { echo "ERROR: no requested adapter module matches expected GKI release $EXPECTED_RELEASE" >&2; cat "$STATUS" >&2; exit 1; }
 printf '%s\n' "$KERNEL_RELEASE" > "$OUT/KERNEL-RELEASE"
 chmod 0755 "$OUT/nhd" "$OUT/nh-load.sh" "$OUT/action.sh"
 cat > "$OUT/ON-DEMAND-LOADING.txt" <<'EOF_ON_DEMAND'
