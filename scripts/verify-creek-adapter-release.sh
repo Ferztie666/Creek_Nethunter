@@ -25,16 +25,11 @@ for d in "$STAGING"/lib/modules/*; do
   [[ -d "$d" ]] || continue
   MODULE_ROOTS+=("$d")
   MODULE_DOMAINS+=("MSM_VENDOR")
-  # MiCode's pinned Xiaomi msm-kernel Makefile deliberately writes only
-  # KERNELVERSION to include/config/kernel.release. Its vendor modules thus
-  # carry the base vermagic; the inner GKI modules carry the full release.
   MODULE_EXPECTED+=("$BASE_RELEASE")
 done
 [[ "${#MODULE_ROOTS[@]}" -gt 0 ]] || die "no module roots under $STAGING or $GKI_STAGING"
 mkdir -p "$(dirname "$REPORT")"
-{
-  printf 'domain\troot\texpected_release\tmodule\tstatus\tvermagic\tmetadata_parser\n'
-} > "$REPORT"
+printf 'domain\troot\texpected_release\tmodule\tstatus\tvermagic\tmetadata_parser\n' > "$REPORT"
 
 count=0
 bad=0
@@ -46,35 +41,22 @@ for i in "${!MODULE_ROOTS[@]}"; do
   expected_domain="${MODULE_EXPECTED[$i]}"
   while IFS= read -r -d '' module; do
     count=$((count + 1))
-    [[ "$domain" == "GKI" ]] && gki_count=$((gki_count + 1)) || msm_count=$((msm_count + 1))
+    if [[ "$domain" == "GKI" ]]; then gki_count=$((gki_count + 1)); else msm_count=$((msm_count + 1)); fi
+
     vermagic_raw="$(modinfo -F vermagic "$module" 2>/dev/null || true)"
-    vermagic="${vermagic_raw%%
-  done < <(find "$root" -type f -name '*.ko' -print0 | sort -z)
-done
-[[ "$count" -gt 0 ]] || die "no .ko files found under any audited module root: ${MODULE_ROOTS[*]}"
-if [[ "$bad" -gt 0 ]]; then
-  echo "ERROR: $bad of $count staged modules failed their domain-specific release check" >&2
-  grep -E 'FAIL_' "$REPORT" >&2 || true
-  exit 1
-fi
-echo "KERNEL_RELEASE_AUDIT=PASS_DOMAIN_AWARE"
-echo "EXPECTED_GKI_RELEASE=$EXPECTED"
-echo "EXPECTED_MSM_VENDOR_RELEASE=$BASE_RELEASE"
-echo "GKI_MODULES=$gki_count"
-echo "MSM_VENDOR_MODULES=$msm_count"
-echo "AUDITED_MODULES=$count"
-echo "REPORT=$REPORT"
-\\n'*}"
+    vermagic="${vermagic_raw%%$'\n'*}"
     parser="modinfo"
     relpath="${module#"$root"/}"
-    # Independently inspect ELF .modinfo when kmod cannot read the field.
-    # This is a second parser for the same embedded metadata, not a compatibility bypass.
+
+    # Cross-check the same embedded ELF metadata with readelf if modinfo
+    # cannot decode it. Missing metadata remains a hard failure.
     if [[ -z "$vermagic" ]] && command -v readelf >/dev/null 2>&1; then
       section_dump="$(readelf -p .modinfo "$module" 2>/dev/null || true)"
-      vermagic="$(printf '%s\\n' "$section_dump" | sed -n 's/.*vermagic=//p' | head -n1)"
+      vermagic="$(printf '%s\n' "$section_dump" | sed -n 's/.*vermagic=//p' | head -n1)"
       [[ -n "$vermagic" ]] && parser="readelf"
     fi
     release="${vermagic%% *}"
+
     if [[ -z "$vermagic" ]]; then
       printf '%s\t%s\t%s\t%s\tFAIL_NO_VERMAGIC\t\tNONE\n' "$domain" "$root" "$expected_domain" "$relpath" >> "$REPORT"
       {
@@ -93,12 +75,14 @@ echo "REPORT=$REPORT"
     fi
   done < <(find "$root" -type f -name '*.ko' -print0 | sort -z)
 done
-[[ "$count" -gt 0 ]] || die "no .ko files found under any audited module root: ${MODULE_ROOTS[*]}"
+
+[[ "$count" -gt 0 ]] || die "no .ko files found under audited module roots: ${MODULE_ROOTS[*]}"
 if [[ "$bad" -gt 0 ]]; then
   echo "ERROR: $bad of $count staged modules failed their domain-specific release check" >&2
   grep -E 'FAIL_' "$REPORT" >&2 || true
   exit 1
 fi
+
 echo "KERNEL_RELEASE_AUDIT=PASS_DOMAIN_AWARE"
 echo "EXPECTED_GKI_RELEASE=$EXPECTED"
 echo "EXPECTED_MSM_VENDOR_RELEASE=$BASE_RELEASE"
