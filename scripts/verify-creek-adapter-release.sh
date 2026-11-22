@@ -79,7 +79,8 @@ done
 [[ "$count" -gt 0 ]] || die "no .ko files found under audited module roots: ${MODULE_ROOTS[*]}"
 if [[ "$bad" -gt 0 ]]; then
   echo "ERROR: $bad of $count staged modules failed their domain-specific release check" >&2
-  grep -E 'FAIL_' "$REPORT" >&2 || true
+  grep -E -A24 'FAIL_NO_VERMAGIC' "$REPORT" >&2 || true
+  grep -E 'FAIL_RELEASE_MISMATCH' "$REPORT" >&2 || true
   exit 1
 fi
 
