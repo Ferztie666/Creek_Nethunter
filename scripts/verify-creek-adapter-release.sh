@@ -33,7 +33,7 @@ done
 [[ "${#MODULE_ROOTS[@]}" -gt 0 ]] || die "no module roots under $STAGING or $GKI_STAGING"
 mkdir -p "$(dirname "$REPORT")"
 {
-  printf 'domain\troot\texpected_release\tmodule\tstatus\tvermagic\n'
+  printf 'domain\troot\texpected_release\tmodule\tstatus\tvermagic\tmetadata_parser\n'
 } > "$REPORT"
 
 count=0
@@ -47,17 +47,49 @@ for i in "${!MODULE_ROOTS[@]}"; do
   while IFS= read -r -d '' module; do
     count=$((count + 1))
     [[ "$domain" == "GKI" ]] && gki_count=$((gki_count + 1)) || msm_count=$((msm_count + 1))
-    vermagic="$(modinfo -F vermagic "$module" 2>/dev/null | head -n1 || true)"
-    release="${vermagic%% *}"
+    vermagic_raw="$(modinfo -F vermagic "$module" 2>/dev/null || true)"
+    vermagic="${vermagic_raw%%
+  done < <(find "$root" -type f -name '*.ko' -print0 | sort -z)
+done
+[[ "$count" -gt 0 ]] || die "no .ko files found under any audited module root: ${MODULE_ROOTS[*]}"
+if [[ "$bad" -gt 0 ]]; then
+  echo "ERROR: $bad of $count staged modules failed their domain-specific release check" >&2
+  grep -E 'FAIL_' "$REPORT" >&2 || true
+  exit 1
+fi
+echo "KERNEL_RELEASE_AUDIT=PASS_DOMAIN_AWARE"
+echo "EXPECTED_GKI_RELEASE=$EXPECTED"
+echo "EXPECTED_MSM_VENDOR_RELEASE=$BASE_RELEASE"
+echo "GKI_MODULES=$gki_count"
+echo "MSM_VENDOR_MODULES=$msm_count"
+echo "AUDITED_MODULES=$count"
+echo "REPORT=$REPORT"
+\\n'*}"
+    parser="modinfo"
     relpath="${module#"$root"/}"
+    # Independently inspect ELF .modinfo when kmod cannot read the field.
+    # This is a second parser for the same embedded metadata, not a compatibility bypass.
+    if [[ -z "$vermagic" ]] && command -v readelf >/dev/null 2>&1; then
+      section_dump="$(readelf -p .modinfo "$module" 2>/dev/null || true)"
+      vermagic="$(printf '%s\\n' "$section_dump" | sed -n 's/.*vermagic=//p' | head -n1)"
+      [[ -n "$vermagic" ]] && parser="readelf"
+    fi
+    release="${vermagic%% *}"
     if [[ -z "$vermagic" ]]; then
-      printf '%s\t%s\t%s\t%s\tFAIL_NO_VERMAGIC\t\n' "$domain" "$root" "$expected_domain" "$relpath" >> "$REPORT"
+      printf '%s\t%s\t%s\t%s\tFAIL_NO_VERMAGIC\t\tNONE\n' "$domain" "$root" "$expected_domain" "$relpath" >> "$REPORT"
+      {
+        echo "---- MODULE METADATA DIAGNOSTIC: $module"
+        file "$module" 2>&1 || true
+        readelf -h "$module" 2>&1 || true
+        readelf -S "$module" 2>&1 || true
+        readelf -p .modinfo "$module" 2>&1 || true
+      } >> "$REPORT"
       bad=$((bad + 1))
     elif [[ "$release" != "$expected_domain" ]]; then
-      printf '%s\t%s\t%s\t%s\tFAIL_RELEASE_MISMATCH\t%s\n' "$domain" "$root" "$expected_domain" "$relpath" "$vermagic" >> "$REPORT"
+      printf '%s\t%s\t%s\t%s\tFAIL_RELEASE_MISMATCH\t%s\t%s\n' "$domain" "$root" "$expected_domain" "$relpath" "$vermagic" "$parser" >> "$REPORT"
       bad=$((bad + 1))
     else
-      printf '%s\t%s\t%s\t%s\tPASS\t%s\n' "$domain" "$root" "$expected_domain" "$relpath" "$vermagic" >> "$REPORT"
+      printf '%s\t%s\t%s\t%s\tPASS\t%s\t%s\n' "$domain" "$root" "$expected_domain" "$relpath" "$vermagic" "$parser" >> "$REPORT"
     fi
   done < <(find "$root" -type f -name '*.ko' -print0 | sort -z)
 done
