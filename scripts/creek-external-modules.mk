@@ -136,7 +136,7 @@ rtl8xxxu:
 	@test -s "$(GKI_OUT)/Module.symvers" || { echo "[creek] missing final GKI Module.symvers: $(GKI_OUT)/Module.symvers" >&2; exit 1; }
 	@test -f "$(RTL8XXXU)/rtl8188eufw_fw.h" || { echo "[creek] missing embedded RTL8188EUS firmware header" >&2; exit 1; }
 	@test -n "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] EXPECTED_KERNEL_RELEASE is required" >&2; exit 1; }
-	@actual_release="$($(MAKE) -s -C $(GKI_KERNEL_SRC) $(GKI_ARGS) kernelrelease)"; \
+	@actual_release="$$($(MAKE) -s -C $(GKI_KERNEL_SRC) $(GKI_ARGS) kernelrelease)"; \
 	  test "$actual_release" = "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] GKI release mismatch: expected=$(EXPECTED_KERNEL_RELEASE) actual=$actual_release" >&2; exit 1; }
 	@echo "[creek] building rtl8xxxu against final GKI: $(EXPECTED_KERNEL_RELEASE)"
 	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) modules
@@ -147,7 +147,7 @@ rtl8xxxu:
 	@set -e; \
 	for kdir in "$(INSTALL_MOD_PATH)"/lib/modules/*; do \
 	  [ -d "$kdir" ] || continue; \
-	  depmod -b "$(INSTALL_MOD_PATH)" "$(basename "$kdir")"; \
+	  depmod -b "$(INSTALL_MOD_PATH)" "$$(basename "$$kdir")"; \
 	done
 
 # Auxiliary camera/display DT repositories are built when their Makefile
