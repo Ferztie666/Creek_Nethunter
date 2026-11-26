@@ -34,9 +34,9 @@ fi
 # scripts intentionally start with comments/properties and have no shebang.
 # Preserve an existing interpreter line, otherwise prepend the gate at byte 0.
 if original.startswith("#!"):
-    first_newline = original.find("\\n")
+    first_newline = original.find("\n")
     if first_newline < 0:
-        updated = original + "\\n" + guard
+        updated = original + "\n" + guard
     else:
         updated = original[:first_newline + 1] + guard + original[first_newline + 1:]
 else:
