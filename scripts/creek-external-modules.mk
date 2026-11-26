@@ -123,15 +123,31 @@ rtw88:
 			depmod -b "$(INSTALL_MOD_PATH)" "$$(basename "$$kdir")"; \
 		done
 
+# Build rtl8xxxu against the final GKI tree, not the MSM/vendor tree.
+# The previous rule used VENDOR_KERNEL_SRC + OUT/msm-kernel and produced
+# vermagic 5.15.167, which the adapter packager correctly rejected against the
+# boot Image release 5.15.167-android13-8-gbf0a81a7f319-dirty.
+GKI_KERNEL_SRC := $(KP)/common
+GKI_OUT := $(abspath $(O)/../gki_kernel/common)
+GKI_ARGS := ARCH=arm64 LLVM=1 O=$(GKI_OUT) LOCALVERSION=$(LOCALVERSION)
+
 rtl8xxxu:
+	@test -s "$(GKI_OUT)/.config" || { echo "[creek] missing final GKI .config: $(GKI_OUT)/.config" >&2; exit 1; }
+	@test -s "$(GKI_OUT)/Module.symvers" || { echo "[creek] missing final GKI Module.symvers: $(GKI_OUT)/Module.symvers" >&2; exit 1; }
 	@test -f "$(RTL8XXXU)/rtl8188eufw_fw.h" || { echo "[creek] missing embedded RTL8188EUS firmware header" >&2; exit 1; }
-	@echo "[creek] building GKI rtl8xxxu (embedded RTL8188EUS firmware)"
-	$(MAKE) -C $(VENDOR_KERNEL_SRC) M=$(RTL8XXXU) $(COMMON_ARGS) modules
-	$(MAKE) -C $(VENDOR_KERNEL_SRC) M=$(RTL8XXXU) $(COMMON_ARGS) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/nethunter/rtl8xxxu modules_install
+	@test -n "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] EXPECTED_KERNEL_RELEASE is required" >&2; exit 1; }
+	@actual_release="$($(MAKE) -s -C $(GKI_KERNEL_SRC) $(GKI_ARGS) kernelrelease)"; \
+	  test "$actual_release" = "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] GKI release mismatch: expected=$(EXPECTED_KERNEL_RELEASE) actual=$actual_release" >&2; exit 1; }
+	@echo "[creek] building rtl8xxxu against final GKI: $(EXPECTED_KERNEL_RELEASE)"
+	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) modules
+	@command -v modinfo >/dev/null 2>&1 || { echo "[creek] modinfo is required for rtl8xxxu vermagic verification" >&2; exit 1; }
+	@actual_vermagic="$(modinfo -F vermagic "$(RTL8XXXU)/rtl8xxxu.ko" | awk 'NR==1 {print $1}')"; \
+	  test "$actual_vermagic" = "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] rtl8xxxu vermagic mismatch: expected=$(EXPECTED_KERNEL_RELEASE) actual=$actual_vermagic" >&2; exit 1; }
+	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/nethunter/rtl8xxxu modules_install
 	@set -e; \
 	for kdir in "$(INSTALL_MOD_PATH)"/lib/modules/*; do \
-		[ -d "$$kdir" ] || continue; \
-		depmod -b "$(INSTALL_MOD_PATH)" "$$(basename "$$kdir")"; \
+	  [ -d "$kdir" ] || continue; \
+	  depmod -b "$(INSTALL_MOD_PATH)" "$(basename "$kdir")"; \
 	done
 
 # Auxiliary camera/display DT repositories are built when their Makefile
