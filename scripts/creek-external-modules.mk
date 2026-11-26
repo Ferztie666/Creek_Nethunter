@@ -137,12 +137,12 @@ rtl8xxxu:
 	@test -f "$(RTL8XXXU)/rtl8188eufw_fw.h" || { echo "[creek] missing embedded RTL8188EUS firmware header" >&2; exit 1; }
 	@test -n "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] EXPECTED_KERNEL_RELEASE is required" >&2; exit 1; }
 	@actual_release="$$($(MAKE) -s -C $(GKI_KERNEL_SRC) $(GKI_ARGS) kernelrelease)"; \
-	  test "$actual_release" = "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] GKI release mismatch: expected=$(EXPECTED_KERNEL_RELEASE) actual=$actual_release" >&2; exit 1; }
+	  test "$$actual_release" = "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] GKI release mismatch: expected=$(EXPECTED_KERNEL_RELEASE) actual=$$actual_release" >&2; exit 1; }
 	@echo "[creek] building rtl8xxxu against final GKI: $(EXPECTED_KERNEL_RELEASE)"
 	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) modules
 	@command -v modinfo >/dev/null 2>&1 || { echo "[creek] modinfo is required for rtl8xxxu vermagic verification" >&2; exit 1; }
-	@actual_vermagic="$(modinfo -F vermagic "$(RTL8XXXU)/rtl8xxxu.ko" | awk 'NR==1 {print $1}')"; \
-	  test "$actual_vermagic" = "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] rtl8xxxu vermagic mismatch: expected=$(EXPECTED_KERNEL_RELEASE) actual=$actual_vermagic" >&2; exit 1; }
+	@actual_vermagic="$$(modinfo -F vermagic "$(RTL8XXXU)/rtl8xxxu.ko" | awk 'NR==1 {print $1}')"; \
+	  test "$$actual_vermagic" = "$(EXPECTED_KERNEL_RELEASE)" || { echo "[creek] rtl8xxxu vermagic mismatch: expected=$(EXPECTED_KERNEL_RELEASE) actual=$$actual_vermagic" >&2; exit 1; }
 	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/nethunter/rtl8xxxu modules_install
 	@set -e; \
 	for kdir in "$(INSTALL_MOD_PATH)"/lib/modules/*; do \
