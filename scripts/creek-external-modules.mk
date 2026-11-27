@@ -6,6 +6,8 @@ KERNEL_SRC ?= $(error KERNEL_SRC is required)
 O ?= $(error O is required)
 INSTALL_MOD_PATH ?= $(error INSTALL_MOD_PATH is required)
 KBUILD_MIXED_TREE ?=
+PYTHON3 ?= /usr/bin/python3
+VERIFY_ELF_VERMAGIC := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/verify-creek-elf-vermagic.py)
 CREEK_DIST_DIR ?= $(abspath $(O)/../../dist)
 
 # build.sh may invoke this makefile while KERNEL_SRC still points at common.
@@ -141,8 +143,7 @@ rtl8xxxu:
 	@echo "[creek] building rtl8xxxu against final GKI: $(EXPECTED_KERNEL_RELEASE)"
 	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) modules
 	@test -s "$(RTL8XXXU)/rtl8xxxu.ko" || { echo "[creek] rtl8xxxu.ko was not produced" >&2; exit 1; }
-	@command -v readelf >/dev/null 2>&1 || { echo "[creek] readelf is required for rtl8xxxu vermagic verification" >&2; exit 1; }
-	@readelf -p .modinfo "$(RTL8XXXU)/rtl8xxxu.ko" | grep -F "vermagic=$(EXPECTED_KERNEL_RELEASE) " >/dev/null || { echo "[creek] rtl8xxxu vermagic section missing or does not match expected GKI release $(EXPECTED_KERNEL_RELEASE)" >&2; exit 1; }
+	@$(PYTHON3) "$(VERIFY_ELF_VERMAGIC)" "$(RTL8XXXU)/rtl8xxxu.ko" "$(EXPECTED_KERNEL_RELEASE)"
 	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/nethunter/rtl8xxxu modules_install
 	@set -e; \
 	for kdir in "$(INSTALL_MOD_PATH)"/lib/modules/*; do \

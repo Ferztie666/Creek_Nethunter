@@ -118,6 +118,8 @@ jobs:
             exit 1
           fi
           bash scripts/creek-safe-preflight.sh "$KP" "$GITHUB_WORKSPACE"
+          /usr/bin/python3 -m py_compile scripts/verify-creek-elf-vermagic.py
+          /usr/bin/python3 scripts/verify-creek-elf-vermagic.py --self-test
 
       - name: Prepare Creek source layout and preserve ABI checker
         shell: bash
