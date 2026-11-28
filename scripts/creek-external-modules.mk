@@ -131,6 +131,10 @@ rtw88:
 # boot Image release 5.15.167-android13-8-gbf0a81a7f319-dirty.
 GKI_KERNEL_SRC := $(KP)/common
 GKI_OUT := $(abspath $(O)/../gki_kernel/common)
+# rtl8xxxu is compiled against GKI; keep it in the separate GKI staging tree.
+# Vendor initramfs expects its own release/kernel subtree and must not see a
+# GKI-only release directory containing only extra/.
+GKI_INSTALL_MOD_PATH := $(abspath $(O)/../gki_kernel/staging)
 GKI_ARGS := ARCH=arm64 LLVM=1 O=$(GKI_OUT) LOCALVERSION=$(LOCALVERSION)
 
 rtl8xxxu:
@@ -144,11 +148,11 @@ rtl8xxxu:
 	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) modules
 	@test -s "$(RTL8XXXU)/rtl8xxxu.ko" || { echo "[creek] rtl8xxxu.ko was not produced" >&2; exit 1; }
 	@$(PYTHON3) "$(VERIFY_ELF_VERMAGIC)" "$(RTL8XXXU)/rtl8xxxu.ko" "$(EXPECTED_KERNEL_RELEASE)"
-	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/nethunter/rtl8xxxu modules_install
+	$(MAKE) -C $(GKI_KERNEL_SRC) M=$(RTL8XXXU) $(GKI_ARGS) INSTALL_MOD_PATH=$(GKI_INSTALL_MOD_PATH) INSTALL_MOD_DIR=extra/nethunter/rtl8xxxu modules_install
 	@set -e; \
-	for kdir in "$(INSTALL_MOD_PATH)"/lib/modules/*; do \
+	for kdir in "$(GKI_INSTALL_MOD_PATH)"/lib/modules/*; do \
 	  [ -d "$kdir" ] || continue; \
-	  depmod -b "$(INSTALL_MOD_PATH)" "$$(basename "$$kdir")"; \
+	  depmod -b "$(GKI_INSTALL_MOD_PATH)" "$$(basename "$$kdir")"; \
 	done
 
 # Auxiliary camera/display DT repositories are built when their Makefile
